@@ -132,6 +132,7 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                                                      'custom')}
 
     def sample(self, bqm: dimod.BinaryQuadraticModel,
+               *,
                beta_range: Optional[Union[List[float], Tuple[float, float]]] = None,
                num_reads: Optional[int] = None,
                num_sweeps: Optional[int] = None,
@@ -142,8 +143,10 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                beta_schedule: Optional[Union[Sequence[float], np.ndarray]] = None,
                initial_states: Optional[dimod.typing.SamplesLike] = None,
                initial_states_generator: InitialStateGenerator = "random",
-               randomize_order: Optional[bool] = False,
-               proposal_acceptance_criteria: Optional[str] = 'Metropolis',
+               make_info_json_serializable: bool = False, 
+               randomize_order: bool = False,
+               proposal_acceptance_criteria: str = 'Metropolis',
+               schedule_sample_interval: Optional[int] = None,
                **kwargs) -> dimod.SampleSet:
         """Sample from a binary quadratic model.
 
@@ -166,7 +169,8 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
 
             num_sweeps:
                 Number of sweeps used in annealing. If no value is provided
-                and ``beta_schedule`` is None, the value defaults to 1000.
+                conforms to ``Hp_field`` and ``num_sweeps_per_beta``. If 
+                ``Hp_field`` is None the value is defaulted to 1000.
 
             num_sweeps_per_beta (int, optional, default=1)
                 Number of sweeps to perform at each :math:`\\beta`. One sweep
@@ -223,6 +227,9 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                     Expands the specified initial states with randomly generated
                     states if fewer than ``num_reads`` or truncates if greater.
 
+            make_info_json_serializable:
+                For json serialization of returned samplesets.
+
             randomize_order:
                 When `True`, each spin update selects a variable uniformly at random.
                 This method is ergodic, obeys detailed balance and preserves symmetries 
@@ -243,6 +250,12 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                 When "Metropolis", each spin flip proposal is accepted according
                 to the Metropolis-Hastings criteria.
 
+            schedule_sample_interval:
+                Number of schedule changes (steps in Hd, Hp) between 
+                samples. Samples are projected and stored sequentially
+                in the sampleset as ``info['statistics']`` after ``num_sweeps_per_beta``
+                updates at given schedule (Hd,Hp) values. 
+            
             interrupt_function (function, optional):
                 A function called with no parameters between each sample of
                 simulated annealing. If the function returns True, simulated
@@ -402,15 +415,18 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                     beta_schedule = np.geomspace(*beta_range, num=num_betas)
                 else:
                     raise ValueError("Beta schedule type {} not implemented".format(beta_schedule_type))
-
+                
+        if schedule_sample_interval is None:
+            schedule_sample_interval = 0;
         timestamp_sample = perf_counter_ns()
 
         # run the simulated annealing algorithm
-        samples, energies = simulated_annealing(
+        samples, energies, statistics = simulated_annealing(
             num_reads, ldata, irow, icol, qdata,
             num_sweeps_per_beta, beta_schedule,
             seed, initial_states_array,
             randomize_order, proposal_acceptance_criteria,
+            schedule_sample_interval,
             interrupt_function)
         timestamp_postprocess = perf_counter_ns()
 
@@ -418,6 +434,14 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
             "beta_range": beta_range,
             "beta_schedule_type": beta_schedule_type
         }
+        if schedule_sample_interval > 0:
+            info['statistics'] = statistics
+        if make_info_json_serializable:
+            info["beta_range"] = np.array(info["beta_range"]).tolist()
+            for numpy_array_key in ["statistics"]:
+                if numpy_array_key in info:
+                    info[numpy_array_key] = info[numpy_array_key].tolist()
+
         response = dimod.SampleSet.from_samples(
             (samples, variable_order),
             energy=energies+bqm.offset,  # add back in the offset

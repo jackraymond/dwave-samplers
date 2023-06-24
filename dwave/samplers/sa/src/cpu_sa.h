@@ -71,6 +71,8 @@ int general_simulated_annealing(
     const uint64_t seed,
     const VariableOrder varorder,
     const Proposal proposal_acceptance_criteria,
+    std::int8_t *statistics,
+    const int schedule_sample_interval,
     callback interrupt_callback,
     void * const interrupt_function
 );
