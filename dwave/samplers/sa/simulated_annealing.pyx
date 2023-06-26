@@ -125,7 +125,7 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
         Number of schedule changes (steps in Hd, Hp) between 
         samples. If the schedule index mod schedule_sample_interval is 0 then
         sampling is performed after ``num_sweeps_per_beta`` updates.
-        Samples are projected and stored sequentially in the statistics array.
+        Samples are stored sequentially in the statistics array.
 
     interrupt_function: function
         Should accept no arguments and return a bool. The function is
@@ -153,7 +153,8 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
     # we can safely return an empty array (and set energies to 0)
     if num_samples*num_vars == 0:
         annealed_states = np.empty((num_samples, num_vars), dtype=np.int8)
-        return annealed_states, np.zeros(num_samples, dtype=np.double), np.zeros(0, dtype=np.int8)
+        stats = np.zeros(0, dtype=np.int8)
+        return annealed_states, np.zeros(num_samples, dtype=np.double), stats
 
     # allocate ndarray for energies
     energies_numpy = np.empty(num_samples, dtype=np.float64)
@@ -167,8 +168,7 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
         stat_size = (num_samples, num_collection_points, num_statistics)
     else:
         stat_size = (num_samples, 1, 1) # Non-empty owing to addressing issue..
-    cdef np.ndarray[np.int8_t, ndim=3, mode='c'] statistics_numpy;
-    statistics_numpy  = np.empty(stat_size, dtype=np.int8)
+    cdef np.ndarray[np.int8_t, ndim=3, mode='c'] statistics_numpy= np.empty(stat_size, dtype=np.int8)
 
     # explicitly convert all Python types to C while we have the GIL
     cdef np.int8_t* _states = &states_numpy[0, 0]
@@ -200,7 +200,6 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
         _interrupt_function = NULL
     else:
         _interrupt_function = <void *>interrupt_function
-
 
     with nogil:
         num = general_simulated_annealing(_states,

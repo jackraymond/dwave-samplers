@@ -42,6 +42,7 @@ class TestTimingInfo(unittest.TestCase):
 
     def test_keys_exist(self):
         for sample_set in self.sample_sets:
+            self.assertIn("timing", sample_set.info)
             with self.subTest(ss=sample_set):
                 self.timing_keys.issubset(sample_set.info['timing'])
 
@@ -68,7 +69,9 @@ class TestSchedules(unittest.TestCase):
             self.assertIs(resp.vartype, dimod.SPIN)  # should be ising
             with self.assertRaises(ValueError):
                 #Should not accept schedule:
-                resp = sampler.sample_ising(h, J, num_reads=num_reads, beta_schedule_type=schedule_type,beta_schedule=[-1,1])
+                resp = sampler.sample_ising(h, J, num_reads=num_reads,
+                                            beta_schedule_type=schedule_type,
+                                            beta_schedule=[-1,1])
         with self.assertRaises(ValueError):
             sampler.sample_ising(h, J, num_reads=num_reads, beta_schedule_type='asd')
 
@@ -85,9 +88,9 @@ class TestSchedules(unittest.TestCase):
             resp = sampler.sample_ising(h, J, num_reads=num_reads, beta_schedule_type='custom',beta_schedule=[-1,1])
         with self.assertRaises(ValueError):
             #numeric
-            resp = sampler.sample_ising(h, J, num_reads=num_reads, beta_schedule_type='custom',beta_schedule=['asd',1])
+            resp = sampler.sample_ising(h, J, num_reads=num_reads, beta_schedule_type='custom', beta_schedule=['asd',1])
 
-        resp = sampler.sample_ising(h, J, num_reads=num_reads, beta_schedule_type='custom',beta_schedule=[0.1,1])
+        resp = sampler.sample_ising(h, J, num_reads=num_reads, beta_schedule_type='custom', beta_schedule=[0.1,1])
 
 class TestSimulatedAnnealingSampler(unittest.TestCase):
 
