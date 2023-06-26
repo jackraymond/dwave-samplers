@@ -336,31 +336,35 @@ int general_simulated_annealing(
 	// Branching here is designed to make expicit compile time optimizations
         if (varorder == Random) {
             if (proposal_acceptance_criteria == Metropolis) {
-                simulated_annealing_run<Random, Metropolis>(state, h, degrees,
-							    neighbors, neighbour_couplings,
-							    sweeps_per_beta, beta_schedule,
-							    statistics + stat_block * sample,
-							    schedule_sample_interval);
+                simulated_annealing_run<Random, Metropolis>(
+	            state, h, degrees,
+		    neighbors, neighbour_couplings,
+		    sweeps_per_beta, beta_schedule,
+		    statistics + stat_block * sample,
+		    schedule_sample_interval);
             } else {
-	        simulated_annealing_run<Random, Gibbs>(state, h, degrees,
-						       neighbors, neighbour_couplings,
-						       sweeps_per_beta, beta_schedule,
-						       statistics + stat_block * sample,
-						       schedule_sample_interval);
+	        simulated_annealing_run<Random, Gibbs>(
+		    state, h, degrees,
+		    neighbors, neighbour_couplings,
+		    sweeps_per_beta, beta_schedule,
+		    statistics + stat_block * sample,
+		    schedule_sample_interval);
           }
         } else {
             if (proposal_acceptance_criteria == Metropolis) {
-                simulated_annealing_run<Sequential, Metropolis>(state, h, degrees,
-								neighbors, neighbour_couplings,
-								sweeps_per_beta, beta_schedule,
-								statistics + stat_block * sample,
-								schedule_sample_interval);
+                simulated_annealing_run<Sequential, Metropolis>(
+		    state, h, degrees,
+		    neighbors, neighbour_couplings,
+		    sweeps_per_beta, beta_schedule,
+		    statistics + stat_block * sample,
+		    schedule_sample_interval);
             } else {
-                simulated_annealing_run<Sequential, Gibbs>(state, h, degrees,
-							   neighbors, neighbour_couplings,
-							   sweeps_per_beta, beta_schedule,
-							   statistics + stat_block * sample,
-							   schedule_sample_interval);
+                simulated_annealing_run<Sequential, Gibbs>(
+		    state, h, degrees,
+		    neighbors, neighbour_couplings,
+		    sweeps_per_beta, beta_schedule,
+		    statistics + stat_block * sample,
+		    schedule_sample_interval);
             }
         }
         // compute the energy of the sample and store it in `energies`

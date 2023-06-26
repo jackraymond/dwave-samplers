@@ -96,6 +96,7 @@ class TestSA(unittest.TestCase):
         randomize_order = False
         proposal_acceptance_criteria = 'Metropolis'
         schedule_sample_interval = 0
+
         np_rand = np.random.RandomState(1234)
         initial_states = 2*np_rand.randint(2, size=(num_samples, num_variables)).astype(np.int8) - 1
 
@@ -169,7 +170,7 @@ class TestSA(unittest.TestCase):
         randomize_order = False
         proposal_acceptance_criteria = 'Metropolis'
         schedule_sample_interval = 0
-        
+
         previous_samples = []
         for seed in (1, 40, 235, 152436, 3462354, 92352355):
             samples0, _, _ = simulated_annealing(num_samples, h, coupler_starts,
