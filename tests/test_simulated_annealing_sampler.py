@@ -429,6 +429,7 @@ class TestDefaultBetaRange(unittest.TestCase):
         self.assertTrue(res2[1] > res1[1])
 
 class TestHeuristicResponse(unittest.TestCase):
+    seed = 1981 # Seeds are good, avoid rare (confusing) probabilistic failures
     def test_job_shop_scheduling_with_linear(self):
         # Set up a job shop scheduling BQM
         #
@@ -506,7 +507,8 @@ class TestHeuristicResponse(unittest.TestCase):
 
         # Get heuristic solution
         sampler = SimulatedAnnealingSampler()
-        response = sampler.sample(jss_bqm, beta_schedule_type="linear", num_reads=10)
+        response = sampler.sample(jss_bqm, beta_schedule_type="linear", num_reads=10,
+                                  seed=self.seed)
         _, response_energy, _ = next(response.data())
 
         # Compare energies
@@ -528,7 +530,8 @@ class TestHeuristicResponse(unittest.TestCase):
 
         # Solve ising problem
         sampler = SimulatedAnnealingSampler()
-        response = sampler.sample_ising({}, J, beta_schedule_type="geometric", num_reads=10)
+        response = sampler.sample_ising({}, J, beta_schedule_type="geometric", num_reads=10,
+                                        seed=self.seed)
         _, response_energy, _ = next(response.data())
 
         # Note: lowest energy found was -3088 with a different benchmarking tool
@@ -684,6 +687,36 @@ class TestCoreSpinUpdate(unittest.TestCase):
                     self.assertLess(stat, upper_bound)
                     self.assertGreater(stat, lower_bound)
 
+    def test_equilibrated_statistics(self):
+        # Under sequential Gibbs sampling of independent spins 1 sweep
+        # is sufficient to equilibrate at P(1) = (1+tanh(beta*h_i))/2.
+        # We can test this at population level.
+
+        # This is a multi-test, but can still be interpretted as k~3
+        # sigma confidence interval with only 4 variables.
+        k = 3
+        num_vars = 4
+        num_reads = 1000
+        prng = np.random.default_rng(self.seed)
+        init_vector = prng.random(size=num_vars) # reproducible for clarity.
+        beta_schedule = [1,2]
+        bqm = dimod.BinaryQuadraticModel.from_ising(
+            {i : -init_vector[i] for i in range(num_vars)},{})
+        lower_bound = np.zeros(num_vars)
+        upper_bound = np.zeros(num_vars)
+        for i in bqm.variables:
+            p = np.exp(-beta_schedule[-1]*bqm.linear[i])/(2*np.cosh(beta_schedule[-1]*bqm.linear[i]))
+ 
+            lower_bound[i], upper_bound[i] = self.make_confidence_interval(p, num_reads, k)
+        response = SimulatedAnnealingSampler().sample(
+            bqm, num_reads=num_reads, seed=self.seed,
+            proposal_acceptance_criteria='Gibbs', randomize_order = False,
+            beta_schedule_type='custom', beta_schedule=beta_schedule, num_sweeps_per_beta=1)
+        stat = np.sum(response.record.sample==1, axis=0)
+        for i in range(num_vars):
+            self.assertLess(stat[i], upper_bound[i])
+            self.assertGreater(stat[i], lower_bound[i])
+
 class TestSerializable(unittest.TestCase):
     def is_jsonable(self, x):
         try:
@@ -712,7 +745,7 @@ class TestStatistics(unittest.TestCase):
                                         num_sweeps=num_sweeps,
                                         num_reads=num_reads,
                                         schedule_sample_interval=ssi)
-            self.assertTrue('statistics' in resp.info)
+            self.assertIn('statistics', resp.info)
             self.assertEqual(resp.info['statistics'].shape,
                              (num_reads,num_sweeps//ssi,num_var))
             self.assertTrue(
