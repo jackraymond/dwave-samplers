@@ -96,7 +96,9 @@ void simulated_annealing_run(
     const vector<vector<int>>& neighbors,
     const vector<vector<double>>& neighbour_couplings,
     const int sweeps_per_beta,
-    const vector<double>& beta_schedule
+    const vector<double>& beta_schedule,
+    std::int8_t* statistics,
+    const int schedule_sample_interval
 ) {
     const int num_vars = h.size();
 
@@ -188,7 +190,12 @@ void simulated_annealing_run(
                     delta_energy[var] *= -1;
                 }
             }
-        }
+	}
+	if (schedule_sample_interval!=0 && beta_idx%schedule_sample_interval==0) {
+	  for(int i=0; i<num_vars; i++) { 
+	    *statistics++ = state[i];
+	  }
+	}
     }
 
     free(delta_energy);
@@ -261,6 +268,8 @@ int general_simulated_annealing(
     const uint64_t seed,
     const VariableOrder varorder,
     const Proposal proposal_acceptance_criteria,
+    std::int8_t* statistics,
+    const int schedule_sample_interval,
     callback interrupt_callback,
     void * const interrupt_function
 ) {
@@ -316,6 +325,7 @@ int general_simulated_annealing(
 
     // get the simulated annealing samples
     int sample = 0;
+    int stat_block = schedule_sample_interval ? num_vars * (beta_schedule.size()/schedule_sample_interval) : 0;
     while (sample < num_samples) {
         // states is a giant spin array that will hold the resulting states for
         // all the samples, so we need to get the location inside that vector
@@ -327,22 +337,30 @@ int general_simulated_annealing(
         if (varorder == Random) {
             if (proposal_acceptance_criteria == Metropolis) {
                 simulated_annealing_run<Random, Metropolis>(state, h, degrees,
-                                                    neighbors, neighbour_couplings,
-                                                    sweeps_per_beta, beta_schedule);
+							    neighbors, neighbour_couplings,
+							    sweeps_per_beta, beta_schedule,
+							    statistics + stat_block * sample,
+							    schedule_sample_interval);
             } else {
-                simulated_annealing_run<Random, Gibbs>(state, h, degrees,
-                                                     neighbors, neighbour_couplings,
-                                                     sweeps_per_beta, beta_schedule);
+	        simulated_annealing_run<Random, Gibbs>(state, h, degrees,
+						       neighbors, neighbour_couplings,
+						       sweeps_per_beta, beta_schedule,
+						       statistics + stat_block * sample,
+						       schedule_sample_interval);
           }
         } else {
             if (proposal_acceptance_criteria == Metropolis) {
                 simulated_annealing_run<Sequential, Metropolis>(state, h, degrees,
-                                                     neighbors, neighbour_couplings,
-                                                     sweeps_per_beta, beta_schedule);
+								neighbors, neighbour_couplings,
+								sweeps_per_beta, beta_schedule,
+								statistics + stat_block * sample,
+								schedule_sample_interval);
             } else {
                 simulated_annealing_run<Sequential, Gibbs>(state, h, degrees,
-                                                      neighbors, neighbour_couplings,
-                                                      sweeps_per_beta, beta_schedule);
+							   neighbors, neighbour_couplings,
+							   sweeps_per_beta, beta_schedule,
+							   statistics + stat_block * sample,
+							   schedule_sample_interval);
             }
         }
         // compute the energy of the sample and store it in `energies`

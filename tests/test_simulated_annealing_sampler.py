@@ -17,6 +17,7 @@ import numpy as np
 import copy
 import itertools
 import warnings
+import json
 
 import dimod
 
@@ -680,5 +681,39 @@ class TestCoreSpinUpdate(unittest.TestCase):
                     self.assertLess(stat, upper_bound)
                     self.assertGreater(stat, lower_bound)
 
+class TestSerializable(unittest.TestCase):
+    def is_jsonable(self, x):
+        try:
+            json.dumps(x)
+            return True
+        except:
+            return False
+    def test_serializable(self):
+        sampler = SimulatedAnnealingSampler()
+        for is_ser in [False, True]:
+            resp = sampler.sample_ising({0:1}, {},
+                                        beta_range=np.array([0.1,1]),
+                                        make_info_json_serializable=is_ser)
+            self.assertEqual(self.is_jsonable(resp.info), is_ser)
+
+
+class TestStatistics(unittest.TestCase):
+    def test_statistics(self):
+        sampler = SimulatedAnnealingSampler()
+        num_var = 10
+        num_reads = 3
+        num_sweeps = 4
+        variables = np.arange(num_var)
+        for ssi in [1,2]:
+            resp = sampler.sample_ising({i:1 for i in variables}, {},
+                                        num_sweeps=num_sweeps,
+                                        num_reads=num_reads,
+                                        schedule_sample_interval=ssi)
+            self.assertTrue('statistics' in resp.info)
+            self.assertEqual(resp.info['statistics'].shape,
+                             (num_reads,num_sweeps//ssi,num_var))
+            self.assertTrue(
+                set(np.unique(resp.info['statistics'])).issubset({-1,1}))
+        
 if __name__ == "__main__":
     unittest.main()

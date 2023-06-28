@@ -43,6 +43,8 @@ cdef extern from "cpu_sa.h":
             const unsigned long long seed,
             const VariableOrder varorder,
             const Proposal proposal_acceptance_criteria,
+            np.int8_t* statistics,
+            const int schedule_sample_interval,
             callback interrupt_callback,
             void *interrupt_function) nogil
 
@@ -50,8 +52,9 @@ cdef extern from "cpu_sa.h":
 def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
                         coupler_weights, sweeps_per_beta, beta_schedule, seed,
                         np.ndarray[np.int8_t, ndim=2, mode="c"] states_numpy,
-                        randomize_order=False,
-                        proposal_acceptance_criteria='Metropolis',
+                        randomize_order,
+                        proposal_acceptance_criteria,
+                        schedule_sample_interval,
                         interrupt_function=None):
     """Wraps `general_simulated_annealing` from `cpu_sa.cpp`. Accepts
     an Ising problem defined on a general graph and returns samples
@@ -97,11 +100,6 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
         The initial seeded states of the simulated annealing runs. Should be of
         a contiguous numpy.ndarray of shape (num_samples, num_variables).
 
-    interrupt_function: function
-        Should accept no arguments and return a bool. The function is
-        called between samples and if it returns True, simulated annealing
-        will return early with the samples it already has.
-
     randomize_order: bool
         When True, each spin update selects a variable uniformly at random.
         When False, updates proceed sequentially through the labeled variables 
@@ -123,6 +121,17 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
         When `Metropolis`, each spin flip proposal is accepted according to the
         Metropolis-Hastings criteria.
 
+    schedule_sample_interval: int
+        Number of schedule changes (steps in Hd, Hp) between 
+        samples. If the schedule index mod schedule_sample_interval is 0 then
+        sampling is performed after ``num_sweeps_per_beta`` updates.
+        Samples are projected and stored sequentially in the statistics array.
+
+    interrupt_function: function
+        Should accept no arguments and return a bool. The function is
+        called between samples and if it returns True, simulated annealing
+        will return early with the samples it already has.
+
     Returns
     -------
     samples : numpy.ndarray
@@ -131,6 +140,12 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
     energies: np.ndarray
         The energies.
 
+    statistics: np.ndarray
+        Matrix of statistics:
+        [independent processes x MCMC steps tracked]
+        by [vector of statistics].
+        For now, statistics are mid-anneal samples only, and so the
+        type is char for compression purposes.
     """
     num_vars = len(h)
 
@@ -138,15 +153,27 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
     # we can safely return an empty array (and set energies to 0)
     if num_samples*num_vars == 0:
         annealed_states = np.empty((num_samples, num_vars), dtype=np.int8)
-        return annealed_states, np.zeros(num_samples, dtype=np.double)
+        return annealed_states, np.zeros(num_samples, dtype=np.double), np.zeros(0, dtype=np.int8)
 
     # allocate ndarray for energies
     energies_numpy = np.empty(num_samples, dtype=np.float64)
     cdef double[:] energies = energies_numpy
 
+    # Perhaps generalize to allow alternatie statistics, log-intervals, or accumulation.
+    num_collection_points = 0
+    if schedule_sample_interval:
+        num_statistics = num_vars
+        num_collection_points = 1 + (beta_schedule.size - 1)//schedule_sample_interval
+        stat_size = (num_samples, num_collection_points, num_statistics)
+    else:
+        stat_size = (num_samples, 1, 1) # Non-empty owing to addressing issue..
+    cdef np.ndarray[np.int8_t, ndim=3, mode='c'] statistics_numpy;
+    statistics_numpy  = np.empty(stat_size, dtype=np.int8)
+
     # explicitly convert all Python types to C while we have the GIL
     cdef np.int8_t* _states = &states_numpy[0, 0]
     cdef double* _energies = &energies[0]
+    cdef np.int8_t* _statistics = &statistics_numpy[0, 0, 0]
     cdef int _num_samples = num_samples
     cdef vector[double] _h = h
     cdef vector[int] _coupler_starts = coupler_starts
@@ -167,6 +194,7 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
         _proposal_acceptance_criteria = Metropolis
     else:
         raise ValueError(f'Unknown proposal_acceptance_criteria: {proposal_acceptance_criteria}')
+    cdef int _schedule_sample_interval = schedule_sample_interval
     cdef void* _interrupt_function
     if interrupt_function is None:
         _interrupt_function = NULL
@@ -187,11 +215,13 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
                                           _seed,
                                           _varorder,
                                           _proposal_acceptance_criteria,
+                                          _statistics,
+                                          _schedule_sample_interval,
                                           interrupt_callback,
                                           _interrupt_function)
 
     # discard the noise if we were interrupted
-    return states_numpy[:num], energies_numpy[:num]
+    return states_numpy[:num], energies_numpy[:num], statistics_numpy[:num]
 
 
 cdef bool interrupt_callback(void * const interrupt_function) with gil:

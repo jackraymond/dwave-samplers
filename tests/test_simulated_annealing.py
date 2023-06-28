@@ -93,12 +93,16 @@ class TestSA(unittest.TestCase):
         beta_schedule = np.linspace(0.01, 3, num=num_sweeps)
         sweeps_at_beta = 1
         seed = 1
-
+        randomize_order = False
+        proposal_acceptance_criteria = 'Metropolis'
+        schedule_sample_interval = 0
         np_rand = np.random.RandomState(1234)
         initial_states = 2*np_rand.randint(2, size=(num_samples, num_variables)).astype(np.int8) - 1
 
         return (num_samples, h, coupler_starts, coupler_ends, coupler_weights,
-                sweeps_at_beta, beta_schedule, seed, initial_states)
+                sweeps_at_beta, beta_schedule, seed, initial_states,
+                randomize_order, proposal_acceptance_criteria,
+                schedule_sample_interval)
 
     def test_submit_problem(self):
         num_variables, num_samples = 10, 100
@@ -107,9 +111,9 @@ class TestSA(unittest.TestCase):
 
         result = simulated_annealing(*problem)
 
-        self.assertTrue(len(result) == 2, "Sampler should return two values")
+        self.assertTrue(len(result) == 3, "Sampler should return two values")
 
-        samples, energies = result
+        samples, energies, _ = result
 
         # ensure samples are all valid samples
         self.assertTrue(type(samples) is np.ndarray)
@@ -131,7 +135,7 @@ class TestSA(unittest.TestCase):
         num_variables = 5
         problem = self._sample_fm_problem(num_variables=num_variables)
 
-        samples, energies = simulated_annealing(*problem)
+        samples, energies, _ = simulated_annealing(*problem)
 
         ground_state = [1]*num_variables
         ground_energy = -(num_variables+3)*num_variables/2
@@ -162,16 +166,26 @@ class TestSA(unittest.TestCase):
         initial_states = np_rand.randint(1, size=(num_samples, num_variables))
         initial_states = 2*initial_states.astype(np.int8) - 1
 
+        randomize_order = False
+        proposal_acceptance_criteria = 'Metropolis'
+        schedule_sample_interval = 0
+        
         previous_samples = []
         for seed in (1, 40, 235, 152436, 3462354, 92352355):
-            samples0, _ = simulated_annealing(num_samples, h, coupler_starts,
-                                              coupler_ends, coupler_weights,
-                                              sweeps_at_beta, beta_schedule,
-                                              seed, np.copy(initial_states))
-            samples1, _ = simulated_annealing(num_samples, h, coupler_starts,
-                                              coupler_ends, coupler_weights,
-                                              sweeps_at_beta, beta_schedule,
-                                              seed, np.copy(initial_states))
+            samples0, _, _ = simulated_annealing(num_samples, h, coupler_starts,
+                                                 coupler_ends, coupler_weights,
+                                                 sweeps_at_beta, beta_schedule,
+                                                 seed, np.copy(initial_states),
+                                                 randomize_order,
+                                                 proposal_acceptance_criteria,
+                                                 schedule_sample_interval)
+            samples1, _, _ = simulated_annealing(num_samples, h, coupler_starts,
+                                                 coupler_ends, coupler_weights,
+                                                 sweeps_at_beta, beta_schedule,
+                                                 seed, np.copy(initial_states),
+                                                 randomize_order,
+                                                 proposal_acceptance_criteria,
+                                                 schedule_sample_interval)
 
             self.assertTrue(np.array_equal(samples0, samples1),
                             "Same seed returned different results")
@@ -187,7 +201,7 @@ class TestSA(unittest.TestCase):
         problem = self._sample_fm_problem(num_variables=num_variables)
 
         # should only get one sample back
-        samples, energies = simulated_annealing(*problem, interrupt_function=lambda: True)
+        samples, energies, _ = simulated_annealing(*problem, interrupt_function=lambda: True)
 
         self.assertEqual(samples.shape, (1, 5))
         self.assertEqual(energies.shape, (1,))
@@ -205,7 +219,7 @@ class TestSA(unittest.TestCase):
             return False
 
         # should only get one sample back
-        samples, energies = simulated_annealing(*problem, interrupt_function=stop)
+        samples, energies, _ = simulated_annealing(*problem, interrupt_function=stop)
 
         self.assertEqual(samples.shape, (5, 5))
         self.assertEqual(energies.shape, (5,))
@@ -226,10 +240,16 @@ class TestSA(unittest.TestCase):
         initial_states = np_rand.randint(1, size=(num_samples, num_variables))
         initial_states = 2*initial_states.astype(np.int8) - 1
 
-        samples, _ = simulated_annealing(num_samples, h, coupler_starts,
-                                         coupler_ends, coupler_weights,
-                                         sweeps_at_beta, beta_schedule,
-                                         seed, np.copy(initial_states))
+        randomize_order = False
+        proposal_acceptance_criteria = 'Metropolis'
+        schedule_sample_interval = 0
+
+        samples, _, _ = simulated_annealing(num_samples, h, coupler_starts,
+                                            coupler_ends, coupler_weights,
+                                            sweeps_at_beta, beta_schedule,
+                                            seed, np.copy(initial_states),
+                                            randomize_order, proposal_acceptance_criteria,
+                                            schedule_sample_interval)
 
         self.assertTrue(np.array_equal(initial_states, samples),
                         "Initial states do not match samples with 0 sweeps")
