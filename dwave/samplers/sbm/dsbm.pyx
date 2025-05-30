@@ -90,14 +90,14 @@ def dsbm(num_samples, num_vars, coupler_starts, coupler_ends,
 
     Returns
     -------
-    samples : numpy.ndarray
-        A 2D numpy array where each row is a sample.
+    sample : int
+        Number of samples processed
 
     """
     # in the case that we either need no samples or there are no variables,
     # we can safely return an empty array (and set energies to 0)
     if num_samples*num_vars == 0:
-        return np.empty((num_samples, num_vars), dtype=np.uint8), np.empty((num_samples, num_vars), dtype=np.uint8)
+        return num_samples
     
     cdef np.float64_t* _states_x = &initial_x[0, 0]
     cdef np.float64_t* _states_y = &initial_y[0, 0]
