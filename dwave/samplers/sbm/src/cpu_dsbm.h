@@ -35,9 +35,7 @@ Copyright 2025 D-Wave
 void discrete_simulated_bifurcation_run(
     double* state_x,
     double* state_y,
-    std::vector<double>& dstate_x,
-    std::vector<double>& dstate_y,
-    const std::vector<int>& degrees,
+    const int num_vars,
     const std::vector<std::vector<int>>& neighbors,
     const std::vector<std::vector<double>>& neighbour_couplings,
     const std::vector<double>& a_schedule,
