@@ -32,12 +32,11 @@ Copyright 2025 D-Wave
 #endif
 
 
-template<typename T>
 void discrete_simulated_bifurcation_run(
-    T* state_x,
-    T* state_y,
-    std::vector<T>& dstate_x,
-    std::vector<T>& dstate_y,
+    double* state_x,
+    double* state_y,
+    std::vector<double>& dstate_x,
+    std::vector<double>& dstate_y,
     const std::vector<int>& degrees,
     const std::vector<std::vector<int>>& neighbors,
     const std::vector<std::vector<double>>& neighbour_couplings,
@@ -49,10 +48,9 @@ void discrete_simulated_bifurcation_run(
 
 typedef bool (*const callback)(void * const function);
 
-template <typename T>
 int general_discrete_simulated_bifurcation_machine(
-    T* states_x,
-    T* states_y,
+    double* states_x,
+    double* states_y,
     const int num_samples,
     const int num_vars,
     const std::vector<int> coupler_starts,

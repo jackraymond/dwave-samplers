@@ -30,8 +30,8 @@ cdef extern from "cpu_dsbm.h":
     int general_discrete_simulated_bifurcation_machine(
             double* samples_x,
             double* samples_y,
-	    const int num_vars,
             const int num_samples,
+	    const int num_vars,
             const vector[int] & coupler_starts,
             const vector[int] & coupler_ends,
             const vector[double] & coupler_weights,
