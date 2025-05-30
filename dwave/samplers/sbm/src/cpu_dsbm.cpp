@@ -29,7 +29,7 @@ inline double Equation17bracket(const double a0, const double atk, const double 
   
   double return_val = 0;
   for (auto j: neighbors){ // Tracking an effective field can speed up (in principle) when signxtk is slowly varying, in proportion to connectivity
-      return_val += neighbor_couplings[j]*signxtk[j];
+      return_val -= neighbor_couplings[j]*signxtk[j];  // Note, D-Wave sign convention for J
   }
   return -(a0 - atk)*xitk + c0*return_val;
 }
@@ -66,31 +66,6 @@ void discrete_simulated_bifurcation_run(
     }
 }
 
-
-// Perform simulated annealing on a general problem
-// @param states a int8 array of size num_samples * number of variables in the
-//        problem. Will be overwritten by this function as samples are filled
-//        in. The initial state of the samples are used to seed the simulated
-//        annealing runs.
-// @param energies a double array of size num_samples. Will be overwritten by
-//        this function as energies are filled in.
-// @param num_samples the number of samples to get.
-// @param h vector of h or field value on each variable
-// @param coupler_starts an int vector containing the variables of one side of
-//        each coupler in the problem
-// @param coupler_ends an int vector containing the variables of the other side 
-//        of each coupler in the problem
-// @param coupler_weights a double vector containing the weights of the couplers
-//        in the same order as coupler_starts and coupler_ends
-// @param sweeps_per_beta The number of sweeps to perform at each beta value.
-//        Total number of sweeps is `sweeps_per_beta` * length of
-//        `Hp_field`.
-// @param Hp_field A list of the beta values to run `sweeps_per_beta`
-//        sweeps at.
-// @param interrupt_callback A function that is invoked between each run of simulated annealing
-//        if the function returns True then it will stop running.
-// @param interrupt_function A pointer to contents that are passed to interrupt_callback.
-// @return the number of samples taken. If no interrupt occured, will equal num_samples.
 int general_discrete_simulated_bifurcation_machine(
     double* states_x,
     double* states_y,
@@ -142,10 +117,8 @@ int general_discrete_simulated_bifurcation_machine(
 
     // get the sbm samples
     int sample = 0;
-    std::vector<double> dstate_x(num_vars);  // Reusable buffer
-    std::vector<double> dstate_y(num_vars);  // Reusable buffer
     while (sample < num_samples) {
-        // states is a giant spin array that will hold the resulting states for
+        // states_x and states_y is a giant spin array that will hold the resulting states for
         // all the samples, so we need to get the location inside that vector
         // where we will store the sample for this sample
         double *state_x = states_x + sample*num_vars;

@@ -78,10 +78,10 @@ class TestSchedules(unittest.TestCase):
             self.assertIs(resp.vartype, dimod.SPIN)  # should be ising
             
 
-class TestSimulatedAnnealingSampler(unittest.TestCase):
+class TestDiscreteSimulatedBifurcationSampler(unittest.TestCase):
     
     def test_instantiation(self):
-        sampler = SimulatedAnnealingSampler()
+        sampler = DiscreteSimulatedBifurcationSampler()
         dimod.testing.assert_sampler_api(sampler)
 
     def test_good_kwargs(self):

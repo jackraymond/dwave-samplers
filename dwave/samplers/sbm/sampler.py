@@ -17,6 +17,7 @@ A dimod :term:`sampler` for discrete simulated bifurcation
 from numbers import Integral
 from typing import List, Sequence, Tuple, Optional, Union, Callable, Iterable
 from time import perf_counter_ns
+import warnings
 
 import numpy as np
 from numpy.random import randint
@@ -123,8 +124,10 @@ class DiscreteSimulatedBifurcationSampler(dimod.Sampler, dimod.Initialized):
         interrupt_function: Optional[Callable[[], bool]] = None,
         **kwargs,
     ) -> dimod.SampleSet:
-        """Sample from a binary quadratic model using an implemented sample
-        method.
+        r"""Sample from a binary quadratic model using an implemented sample
+        method. Note that non-zero linear terms (h, in Ising representation)
+        are ignored, the algorithm is specific to zero-field models. The assumed
+        Hamiltonian is :math:`H = - \sum_{i<j} J_{i,j}s_i s_j` for spin states.
 
         Args:
             bqm:
@@ -225,10 +228,13 @@ class DiscreteSimulatedBifurcationSampler(dimod.Sampler, dimod.Initialized):
 
         # read out the BQM
         ldata, (irow, icol, qdata), off = bqm.to_numpy_vectors()
-        assert np.max(np.abs(ldata)) < 1e-15  # algorithm applies at h=0
-
-        if c0 is None:
+        if len(ldata)>0 and np.max(np.abs(ldata)) > 1e-15:  # algorithm applies at h=0
+            warnings.warn('bqm has non-zero h values, but dSBM is defined with h=0. Given h values will be ignored'
+                          'a warning applies, rather than an error, for compatibility with dimod sampler testing')
+        if c0 is None and len(qdata)>0:
             c0 = 0.5*np.sqrt((len(ldata)-1)/np.sum(qdata**2))
+        else:
+            c0 = 1
         if initial_x is None:
             if initial_y is not None:
                 raise ValueError('If initial_x is provided, initial_y should also be provided')
@@ -267,12 +273,12 @@ class DiscreteSimulatedBifurcationSampler(dimod.Sampler, dimod.Initialized):
             interrupt_function,
         )
         timestamp_postprocess = perf_counter_ns()
-
         info = {
             "c0": c0,
-            "x": initial_x[:num_processed],
-            "y": initial_y[:num_processed],
+            "x": initial_x[:num_processed,:],
+            "y": initial_y[:num_processed,:],
         }
+        
         # states are projected to +/-1 to play nice.
         # zero should not technically be possible, with sensible
         # initialization.
