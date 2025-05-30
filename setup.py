@@ -49,6 +49,7 @@ class build_ext_with_args(build_ext):
 
 setup(
     cmdclass={'build_ext': build_ext_with_args},
+<<<<<<< HEAD
     ext_modules=cythonize([
         Extension('dwave.samplers.greedy.descent', ['dwave/samplers/greedy/descent.pyx']),
         Extension('dwave.samplers.random.cyrandom', ['dwave/samplers/random/cyrandom.pyx']),
@@ -60,6 +61,18 @@ setup(
         Extension('dwave.samplers.tree.solve', ['dwave/samplers/tree/solve.pyx']),
         Extension('dwave.samplers.tree.utilities', ['dwave/samplers/tree/utilities.pyx']),
     ]),
+=======
+    ext_modules=cythonize(
+        ['dwave/samplers/greedy/descent.pyx',
+         'dwave/samplers/random/*.pyx',
+         'dwave/samplers/sa/*.pyx',
+         'dwave/samplers/sbm/*.pyx',
+         'dwave/samplers/sqa/*.pyx',
+         'dwave/samplers/tabu/tabu_search.pyx',
+         'dwave/samplers/tree/*.pyx',
+         ],
+        ),
+>>>>>>> 0b8fb53 (Add compilable SBM framework: missing symbol error WIP)
     include_dirs=[
         dimod.get_include(),
         numpy.get_include(),
