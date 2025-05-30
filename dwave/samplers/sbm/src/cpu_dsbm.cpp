@@ -31,8 +31,8 @@ using namespace std;
 // @param degrees the degree of each variable
 // @param neighbors lists of the neighbors of each variable, such that 
 //        neighbors[i][j] is the jth neighbor of variable i. Note
-// @param neighbour_couplings same as neighbors, but instead has the J value.
-//        neighbour_couplings[i][j] is the J value or weight on the coupling
+// @param neighbor_couplings same as neighbors, but instead has the J value.
+//        neighbor_couplings[i][j] is the J value or weight on the coupling
 //        between variables i and neighbors[i][j]. 
 // @param sweeps_per_beta The number of sweeps to perform at each beta value.
 //        Total number of sweeps is `sweeps_per_beta` * length of
@@ -41,29 +41,28 @@ using namespace std;
 //        sweeps at.
 // @return Nothing, but `state` now contains the result of the run.
 
-template<typename T>
 void discrete_simulated_bifurcation_run(
-    T* state_x,
-    T* state_y,
-    std::vector<T> & dstate_x,
-    std::vector<T> & dstate_y,
+    double* state_x,
+    double* state_y,
+    std::vector<double> & dstate_x,
+    std::vector<double> & dstate_y,
     const std::vector<int>& degrees,
     const std::vector<vector<int>>& neighbors,
-    const std::vector<vector<double>>& neighbour_couplings,
+    const std::vector<vector<double>>& neighbor_couplings,
     const std::vector<double>& a_schedule,
     const double a0,
     const double c0,
     const double _Delta_t
 ) {
-    const int num_vars = state_x.size();
-
+    const unsigned int num_vars = dstate_x.size();
+    
     /*
       // Feature enhancement for O(conn.) speed up with dense matrices
       // We may wish to save a sign(state_x) variable separately and update delta_energy for higher efficiency
     for (int var = 0; var < num_vars; var++) {
       // Local fields
       delta_energy[var] = get_marginal_state_fieldC(var, state, h, degrees,
-						    neighbors, neighbour_couplings,
+						    neighbors, neighbor_couplings,
 						    state_to_costheta);
     } 
     */
@@ -99,10 +98,9 @@ void discrete_simulated_bifurcation_run(
 //        if the function returns True then it will stop running.
 // @param interrupt_function A pointer to contents that are passed to interrupt_callback.
 // @return the number of samples taken. If no interrupt occured, will equal num_samples.
-template <typename T>
 int general_discrete_simulated_bifurcation_machine(
-    T* states_x,
-    T* states_y,
+    double* states_x,
+    double* states_y,
     const int num_samples,
     const int num_vars,
     const vector<int> coupler_starts,
@@ -126,12 +124,12 @@ int general_discrete_simulated_bifurcation_machine(
     // neighbors is a vector of vectors, such that neighbors[i][j] is the jth
     // neighbor of variable i
     vector<vector<int>> neighbors(num_vars);
-    // neighbour_couplings is another vector of vectors with the same structure
-    // except neighbour_couplings[i][j] is the weight on the coupling between i
+    // neighbor_couplings is another vector of vectors with the same structure
+    // except neighbor_couplings[i][j] is the weight on the coupling between i
     // and its jth neighbor
-    vector<vector<double>> neighbour_couplings(num_vars);
+    vector<vector<double>> neighbor_couplings(num_vars);
 
-    // build the degrees, neighbors, and neighbour_couplings vectors by
+    // build the degrees, neighbors, and neighbor_couplings vectors by
     // iterating over the inputted coupler vectors
     for (unsigned int cplr = 0; cplr < coupler_starts.size(); cplr++) {
         int u = coupler_starts[cplr];
@@ -145,8 +143,8 @@ int general_discrete_simulated_bifurcation_machine(
         neighbors[u].push_back(v);
         neighbors[v].push_back(u);
         // add the weights
-        neighbour_couplings[u].push_back(coupler_weights[cplr]);
-        neighbour_couplings[v].push_back(coupler_weights[cplr]);
+        neighbor_couplings[u].push_back(coupler_weights[cplr]);
+        neighbor_couplings[v].push_back(coupler_weights[cplr]);
 
         // increase the degrees of both variables
         degrees[u]++;
@@ -156,8 +154,8 @@ int general_discrete_simulated_bifurcation_machine(
 
     // get the sbm samples
     int sample = 0;
-    std::vector<T> dstate_x(num_vars);  // Reusable buffer
-    std::vector<T> dstate_y(num_vars);  // Reusable buffer
+    std::vector<double> dstate_x(num_vars);  // Reusable buffer
+    std::vector<double> dstate_y(num_vars);  // Reusable buffer
     while (sample < num_samples) {
         // states is a giant spin array that will hold the resulting states for
         // all the samples, so we need to get the location inside that vector
@@ -169,7 +167,7 @@ int general_discrete_simulated_bifurcation_machine(
         // Branching here is designed to make expicit compile time optimizations
 	discrete_simulated_bifurcation_run(state_x, state_y,
 					   dstate_x, dstate_y, degrees,
-					   neighbors, neighbour_couplings,
+					   neighbors, neighbor_couplings,
 					   a_schedule,
 					   a0,
 					   c0,
