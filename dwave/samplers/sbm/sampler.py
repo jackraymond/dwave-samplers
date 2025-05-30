@@ -1,0 +1,306 @@
+# Copyright 2025 D-Wave
+#
+#    Licensed under the Apache License, Version 2.0 (the "License");
+#    you may not use this file except in compliance with the License.
+#    You may obtain a copy of the License at
+#
+#        http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS,
+#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#    See the License for the specific language governing permissions and
+#    limitations under the License.
+"""
+A dimod :term:`sampler` for discrete simulated bifurcation
+"""
+from numbers import Integral
+from typing import List, Sequence, Tuple, Optional, Union, Callable
+from time import perf_counter_ns
+
+import numpy as np
+from numpy.random import randint
+
+import dimod
+from dimod.core.initialized import InitialStateGenerator
+from dwave.samplers.sbm.dsbm import dsbm
+
+
+__all__ = ["DiscreteSimulatedBifurcationSampler"]
+
+
+class DiscreteSimulatedBifurcationSampler(dimod.Sampler, dimod.Initialized):
+    """Simulated Bifurcation Machine Sampler
+
+    See https://www.science.org/doi/epdf/10.1126/sciadv.abe7953
+    Implements Methods: Discrete Simulated Bifurcation (17) and (18)
+
+    Examples:
+        This example solves a simple Ising problem.
+
+        >>> from dwave.samplers.sbm import DisceteSimulatedBifurcationSampler
+        >>> sampler = DiscreteSimulatedBifurcationSampler()
+        >>> h = {'a': 0.0, 'b': 0.0, 'c': 0.0}
+        >>> J = {('a', 'b'): 1.0, ('b', 'c'): 1.0, ('a', 'c'): 1.0}
+        >>> sampleset = sampler.sample_ising(h, J, num_reads=10)
+        >>> print(sampleset.first.energy)
+        -1.0
+
+    """
+
+    parameters = None
+    """dict: A dict where keys are the keyword parameters accepted by the
+    sampler methods (allowed kwargs) and values are lists of
+    :attr:`DiscreteSimulatedBifurcationSampler.properties` relevant to each parameter.
+
+    See :meth:`.DiscreteSimulatedBifurcationSampler.sample` for a description of the
+    parameters.
+
+    Examples:
+        This example looks at a sampler's parameters and some of their values.
+
+        >>> from dwave.samplers.sbm import DiscreteSimulatedBifurcationSampler
+        >>> sampler = DiscreteSimulatedBifurcationSampler()
+        >>> for kwarg in sorted(sampler.parameters):
+        ...     print(kwarg)
+        a0
+        a_schedule_type
+        initial_states
+        initial_states_generator
+        interrupt_function
+        num_reads
+        num_sweeps
+        num_sweeps_per_beta
+        seed
+    """
+
+    properties = None
+    """dict: A dict containing any additional information about the sampler.
+
+    Examples:
+        This example looks at the values set for a sampler property.
+
+        >>> from dwave.samplers.sbm import DiscreteSimulatedBifurcationSampler
+        >>> sampler = DiscreteSimulatedBifurcationSampler()
+        >>> sampler.properties['a_schedule_options']
+        ('linear', 'custom')
+
+    """
+
+    def __init__(self):
+        # create a local copy in case folks for some reason want to modify them
+        self.parameters = {
+            "a0": [],
+            "num_reads": [],
+            "num_sweeps": [],
+            "num_sweeps_per_beta": [],
+            "a_schedule_type": ["a_schedule_options"],
+            "seed": [],
+            "interrupt_function": [],
+            "initial_states": [],
+            "initial_states_generator": [],
+        }
+        self.properties = {"a_schedule_options": ("linear", "custom")}
+
+    def sample(
+        self,
+        bqm: dimod.BinaryQuadraticModel,
+        *,
+        c0: Optional[float] = None,
+        a0: float = 1,
+        Delta_t: float = 1,
+        num_reads: Optional[int] = None,
+        num_sweeps: Optional[int] = None,
+        a_schedule: Optional[Iterable] = None,
+        seed: Optional[int] = None,
+        initial_x: Optional[np.ndarray] = None,
+        initial_y: Optional[np.ndarray] = None,
+        initial_scale: float = 1,
+        make_info_json_serializable: bool = False,
+        project_states: Tuple[bool, bool] = (False, True),
+        schedule_sample_interval: Optional[int] = None,
+        randomize_order: bool = False,
+        interrupt_function: Optional[Callable[[], bool]] = None,
+        **kwargs,
+    ) -> dimod.SampleSet:
+        """Sample from a binary quadratic model using an implemented sample
+        method.
+
+        Args:
+            bqm:
+                The binary quadratic model to be sampled.
+                In the Ising representation, h should be zero.
+
+            c0:
+                Algorithm parameter, defaulted to 0.5root(N-1)/root(\sum_{i < j}Jij^2)
+
+            a0:
+                Algorithm parameter, defaulted to 1
+
+            Delta_t: 
+                Algorithm parameter. total time per read is num_sweeps*dt. Delta_t ~ 1 
+                is recommended.
+
+            num_reads:
+                Number of reads. Each read is generated by one run of the
+                algorithm. If `num_reads` is not explicitly
+                given, it is selected to match the number of initial_x
+                given. If initial states are not provided, only one read is
+                performed.
+
+            num_sweeps:
+                Number of sweeps used in annealing. If no value is provided
+                and ``Hp_field`` is None the value is defaulted to 1000.
+
+            a_schedule:
+                A sequence of values a(n Delta_t) for n=0, .., num_sweeps -1. 
+                When not specified a linear increase from 0 to a0 is used.
+
+            seed:
+                Seed to use for the PRNG. Specifying a particular seed with a
+                constant set of parameters produces identical results. If not
+                provided, a random seed is chosen.
+
+            initial_x:
+                A numpy array, rows specify initial conditions for x, columns
+                specify index, in order matching bqm.variables.
+
+            initial_y:
+                A numpy array, rows specify initial conditions for x, columns
+                specify index, in order matching bqm.variables. Dimensions
+                should match initial_x when specified.
+
+            initial_scale:
+                When initial states are not specified they are generated
+                independently and uniformly in the range [-initial_scale, 
+                initial_scale]. 
+            
+            interrupt_function:
+                If provided, interrupt_function is called with no parameters
+                between each sample of simulated annealing. If the function
+                returns True, then simulated annealing will terminate and return
+                with all of the samples and energies found so far.
+
+        Returns:
+            :obj:``dimod.Response``: A ``dimod`` :obj:``~dimod.Response`` object.
+
+        Examples:
+            This example runs simulated annealing on a binary quadratic model
+            with some different input parameters.
+
+            >>> import dimod
+            >>> from dwave.samplers.sbm import DiscreteSimulatedBifurcationSampler
+            ...
+            >>> sampler = DiscreteSimulatedBifurcationSampler()
+            >>> bqm = dimod.BinaryQuadraticModel({'a': .5, 'b': -.5},
+            ...                                  {('a', 'b'): -1}, 0.0,
+            ...                                  dimod.SPIN)
+            >>> # Run with default parameters
+            >>> sampleset = sampler.sample(bqm)
+            >>> # Run with specified parameters
+            >>> sampleset = sampler.sample(bqm, seed=1234,
+            ...                            num_sweeps=20)
+            >>> # Reuse a seed
+            >>> a1 = next((sampler.sample(bqm, seed=88)).samples())['a']
+            >>> a2 = next((sampler.sample(bqm, seed=88)).samples())['a']
+            >>> a1 == a2
+            True
+
+        """
+        timestamp_preprocess = perf_counter_ns()
+
+        # get the original vartype so we can return consistently
+        original_vartype = bqm.vartype
+
+        # convert to spin (if needed)
+        if bqm.vartype is not dimod.SPIN:
+            bqm = bqm.change_vartype(dimod.SPIN, inplace=False)
+
+        # read out the BQM
+        ldata, (irow, icol, qdata), off = bqm.to_numpy_vectors(
+            variable_order=variable_order
+        )
+
+        assert np.max(np.abs(ldata)) < 1e-15  # algorithm applies at h=0
+
+        if c0 is None:
+            c0 = 0.5*np.sqrt(len(ldata)/np.sum(qdata))
+        if initial_x is None:
+            if initial_y is not None:
+                raise ValueError('If initial_x is provided, initial_y should also be specified')
+            prng = np.random.default_rng(seed)
+            initial_x = initial_scale*(1-2*prng.random(shape=(num_reads, bqm.num_variables)))
+            initial_y = initial_scale*(1-2*prng.random(shape=(num_reads, bqm.num_variables)))
+        elif initial_y is None or initial_x.shape != initial_y.shape or initial_x.dtype != initial_y.dtype:
+            raise ValueError('initial_x and initial_y should be specified'
+                             'together with consistent shape and type')
+        
+        if interrupt_function and not callable(interrupt_function):
+            raise TypeError("'interrupt_function' should be a callable")
+
+        if a_schedule is None:
+            a_schedule = a0*np.arange(num_sweeps)/(num_sweeps-1)
+
+        timestamp_sample = perf_counter_ns()
+        # run the dsbm
+        print(num_reads,
+            ldata,
+            irow,
+            icol,
+            qdata,
+            a0,
+            c0,
+            Delta_t,
+            a_schedule,
+            initial_x,
+            initial_y,
+            interrupt_function,)
+        
+        num_processed = dsbm(
+            num_reads,
+            len(ldata),
+            irow,
+            icol,
+            qdata,
+            a0,
+            c0,
+            Delta_t,
+            a_schedule,
+            initial_x,
+            initial_y,
+            interrupt_function,
+        )
+        timestamp_postprocess = perf_counter_ns()
+
+        info = {
+            "c0": c0,
+            "x": initial_x[:num_processed],
+            "y": initial_y[:num_processed],
+        }
+        # states are projected to +/-1 to play nice.
+        # zero should not technically be possible, with sensible
+        # initialization.
+        #
+        response = dimod.SampleSet.from_samples(
+            (np.sign(initial_x[:num_processed]), bqm.variables),
+            energy=energies + bqm.offset,  # add back in the offset
+            info=info,
+            vartype="SPIN",
+        )
+
+        response.change_vartype(original_vartype, inplace=True)
+
+        # Developer note: the specific keys of the timing dict are chosen to be consistent with
+        #                 other samplers' timing dict.
+        response.info.update(
+            dict(
+                timing=dict(
+                    preprocessing_ns=timestamp_sample - timestamp_preprocess,
+                    sampling_ns=timestamp_postprocess - timestamp_sample,
+                    # Update timing info last to capture the full postprocessing time
+                    postprocessing_ns=perf_counter_ns() - timestamp_postprocess,
+                )
+            )
+        )
+
+        return response
