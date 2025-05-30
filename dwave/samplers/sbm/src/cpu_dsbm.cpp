@@ -23,53 +23,46 @@ Copyright 2025 D-Wave
 
 using namespace std;
 
-// Performs a single run of simulated annealing with the given inputs.
-// @param state a int8 array where each int8 holds the state of a
-//        variable. Note that this will be used as the initial state of the
-//        run.
-// @param h vector of h or field value on each variable
-// @param degrees the degree of each variable
-// @param neighbors lists of the neighbors of each variable, such that 
-//        neighbors[i][j] is the jth neighbor of variable i. Note
-// @param neighbor_couplings same as neighbors, but instead has the J value.
-//        neighbor_couplings[i][j] is the J value or weight on the coupling
-//        between variables i and neighbors[i][j]. 
-// @param sweeps_per_beta The number of sweeps to perform at each beta value.
-//        Total number of sweeps is `sweeps_per_beta` * length of
-//        `Hp_field`.
-// @param Hp_field A list of the beta values to run `sweeps_per_beta`
-//        sweeps at.
-// @return Nothing, but `state` now contains the result of the run.
+// See https://www.science.org/doi/epdf/10.1126/sciadv.abe7953
+
+inline double Equation17bracket(const double a0, const double atk, const double xitk, double c0, const vector<int> & neighbors, const vector<double>& neighbor_couplings, const vector<double> signxtk){
+  
+  double return_val = 0;
+  for (auto j: neighbors){ // Tracking an effective field can speed up (in principle) when signxtk is slowly varying, in proportion to connectivity
+      return_val += neighbor_couplings[j]*signxtk[j];
+  }
+  return -(a0 - atk)*xitk + c0*return_val;
+}
 
 void discrete_simulated_bifurcation_run(
     double* state_x,
     double* state_y,
-    std::vector<double> & dstate_x,
-    std::vector<double> & dstate_y,
-    const std::vector<int>& degrees,
-    const std::vector<vector<int>>& neighbors,
-    const std::vector<vector<double>>& neighbor_couplings,
-    const std::vector<double>& a_schedule,
+    const int num_vars,
+    const vector<vector<int>>& neighbors,
+    const vector<vector<double>>& neighbor_couplings,
+    const vector<double>& a_schedule,
     const double a0,
     const double c0,
-    const double _Delta_t
+    const double Delta_t
 ) {
-    const unsigned int num_vars = dstate_x.size();
-    
-    /*
-      // Feature enhancement for O(conn.) speed up with dense matrices
-      // We may wish to save a sign(state_x) variable separately and update delta_energy for higher efficiency
-    for (int var = 0; var < num_vars; var++) {
-      // Local fields
-      delta_energy[var] = get_marginal_state_fieldC(var, state, h, degrees,
-						    neighbors, neighbor_couplings,
-						    state_to_costheta);
-    } 
-    */
-    for (int a_idx = 0; a_idx < (int)a_schedule.size(); a_idx++) {
+    std::vector<double> signxtk(num_vars);
+    for (int varI = 0; varI < num_vars; varI++) {
+      signxtk[varI] = (state_x[varI] > 0) - (state_x[varI] < 0);
+    }  
+    for (auto atk: a_schedule){
         for (int varI = 0; varI < num_vars; varI++) {
-	  
+            state_y[varI] += Delta_t*Equation17bracket(a0, atk, state_x[varI], c0, neighbors[varI], neighbor_couplings[varI], signxtk);  // Eq 17
         }
+        for (int varI = 0; varI < num_vars; varI++) {
+	    state_x[varI] += Delta_t*a0*state_y[varI];  // Eq 18
+        }
+	for (int varI = 0; varI < num_vars; varI++) {
+	  signxtk[varI] = (state_x[varI] > 0) - (state_x[varI] < 0);
+	  // Avoided if statements are assumed to help the compiler + efficiency:
+	  double inrange = (abs(state_x[varI]) > 1);
+	  state_y[varI] *= inrange;  // Zero out
+	  state_x[varI] = inrange*state_x[varI] + (1 - inrange)*signxtk[varI]; // Threshold  
+	}
     }
 }
 
@@ -119,8 +112,6 @@ int general_discrete_simulated_bifurcation_machine(
         throw runtime_error("coupler vectors have mismatched lengths");
     }
     
-    // degrees will be a vector of the degrees of each variable
-    vector<int> degrees(num_vars, 0);
     // neighbors is a vector of vectors, such that neighbors[i][j] is the jth
     // neighbor of variable i
     vector<vector<int>> neighbors(num_vars);
@@ -129,7 +120,7 @@ int general_discrete_simulated_bifurcation_machine(
     // and its jth neighbor
     vector<vector<double>> neighbor_couplings(num_vars);
 
-    // build the degrees, neighbors, and neighbor_couplings vectors by
+    // build the neighbors, and neighbor_couplings vectors by
     // iterating over the inputted coupler vectors
     for (unsigned int cplr = 0; cplr < coupler_starts.size(); cplr++) {
         int u = coupler_starts[cplr];
@@ -146,9 +137,6 @@ int general_discrete_simulated_bifurcation_machine(
         neighbor_couplings[u].push_back(coupler_weights[cplr]);
         neighbor_couplings[v].push_back(coupler_weights[cplr]);
 
-        // increase the degrees of both variables
-        degrees[u]++;
-        degrees[v]++;
     }
 
 
@@ -165,8 +153,7 @@ int general_discrete_simulated_bifurcation_machine(
         // then do the actual sample. this function will modify state, storing
         // the sample there
         // Branching here is designed to make expicit compile time optimizations
-	discrete_simulated_bifurcation_run(state_x, state_y,
-					   dstate_x, dstate_y, degrees,
+	discrete_simulated_bifurcation_run(state_x, state_y, num_vars,
 					   neighbors, neighbor_couplings,
 					   a_schedule,
 					   a0,
