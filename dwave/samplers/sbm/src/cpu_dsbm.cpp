@@ -28,8 +28,8 @@ using namespace std;
 inline double Equation17bracket(const double a0, const double atk, const double xitk, double c0, const vector<int> & neighbors, const vector<double>& neighbor_couplings, const vector<double> signxtk){
   
   double return_val = 0;
-  for (auto j: neighbors){ // Tracking an effective field can speed up (in principle) when signxtk is slowly varying, in proportion to connectivity
-      return_val -= neighbor_couplings[j]*signxtk[j];  // Note, D-Wave sign convention for J
+  for (int idx=0; idx<neighbors.size(); idx++){ // Tracking an effective field can speed up (in principle) when signxtk is slowly varying, in proportion to connectivity
+      return_val -= neighbor_couplings[idx]*signxtk[neighbors[idx]];  // Note, D-Wave sign convention for J
   }
   return -(a0 - atk)*xitk + c0*return_val;
 }
@@ -59,7 +59,7 @@ void discrete_simulated_bifurcation_run(
 	for (int varI = 0; varI < num_vars; varI++) {
 	  signxtk[varI] = (state_x[varI] > 0) - (state_x[varI] < 0);
 	  // Avoided if statements are assumed to help the compiler + efficiency:
-	  double inrange = (abs(state_x[varI]) > 1);
+	  double inrange = (abs(state_x[varI]) <= 1);
 	  state_y[varI] *= inrange;  // Zero out
 	  state_x[varI] = inrange*state_x[varI] + (1 - inrange)*signxtk[varI]; // Threshold  
 	}

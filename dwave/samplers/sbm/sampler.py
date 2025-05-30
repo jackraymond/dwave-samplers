@@ -18,6 +18,7 @@ from numbers import Integral
 from typing import List, Sequence, Tuple, Optional, Union, Callable, Iterable
 from time import perf_counter_ns
 import warnings
+import numbers
 
 import numpy as np
 from numpy.random import randint
@@ -91,17 +92,19 @@ class DiscreteSimulatedBifurcationSampler(dimod.Sampler, dimod.Initialized):
     def __init__(self):
         # create a local copy in case folks for some reason want to modify them
         self.parameters = {
+            "c0": [],
             "a0": [],
+            "Delta_t": [],
             "num_reads": [],
             "num_sweeps": [],
-            "num_sweeps_per_beta": [],
-            "a_schedule_type": ["a_schedule_options"],
+            "a_schedule": [],
             "seed": [],
-            "interrupt_function": [],
-            "initial_states": [],
-            "initial_states_generator": [],
+            "initial_x": [],
+            "initial_y": [],
+            "initial_scale": [],
+            "interrupt_function": []
         }
-        self.properties = {"a_schedule_options": ("linear", "custom")}
+        self.properties = {}
 
     def sample(
         self,
@@ -117,10 +120,6 @@ class DiscreteSimulatedBifurcationSampler(dimod.Sampler, dimod.Initialized):
         initial_x: Optional[np.ndarray] = None,
         initial_y: Optional[np.ndarray] = None,
         initial_scale: float = 1,
-        make_info_json_serializable: bool = False,
-        project_states: Tuple[bool, bool] = (False, True),
-        schedule_sample_interval: Optional[int] = None,
-        randomize_order: bool = False,
         interrupt_function: Optional[Callable[[], bool]] = None,
         **kwargs,
     ) -> dimod.SampleSet:
@@ -254,7 +253,10 @@ class DiscreteSimulatedBifurcationSampler(dimod.Sampler, dimod.Initialized):
             if num_sweeps is not None and num_sweeps > 1:
                 a_schedule = a0*np.arange(num_sweeps)/(num_sweeps-1)
             else:
+                if num_sweeps == 0:
+                    warnings.warn('deal with num_sweeps==0 edge case later - messes up tests to use empty')
                 a_schedule = np.ones(1)*a0
+                
             
         timestamp_sample = perf_counter_ns()
         # run the dsbm
