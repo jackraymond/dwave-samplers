@@ -225,7 +225,6 @@ class DiscreteSimulatedBifurcationSampler(dimod.Sampler, dimod.Initialized):
 
         # read out the BQM
         ldata, (irow, icol, qdata), off = bqm.to_numpy_vectors()
-        print(ldata, 'Debugging')
         assert np.max(np.abs(ldata)) < 1e-15  # algorithm applies at h=0
 
         if c0 is None:
@@ -253,19 +252,6 @@ class DiscreteSimulatedBifurcationSampler(dimod.Sampler, dimod.Initialized):
             
         timestamp_sample = perf_counter_ns()
         # run the dsbm
-        print(num_reads,
-            ldata,
-            irow,
-            icol,
-            qdata,
-            a0,
-            c0,
-            Delta_t,
-            a_schedule,
-            initial_x,
-            initial_y,
-            interrupt_function,)
-        
         num_processed = dsbm(
             num_reads,
             len(ldata),
