@@ -227,7 +227,6 @@ class TestDiscreteSimulatedBifurcationSampler(unittest.TestCase):
                 np.array_equal(samples0, samples1),
                 "Same seed returned different results",
             )
-            print(num_sweeps, seed, states_x-states_x1)
             self.assertTrue(
                 np.array_equal(states_x, states_x1),
                 "Same seed returned different x results",
@@ -238,7 +237,6 @@ class TestDiscreteSimulatedBifurcationSampler(unittest.TestCase):
                     "Different seed returned same results",
                 )
             else:
-                print(states_x)
                 previous_x = states_x
 
 
