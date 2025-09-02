@@ -114,7 +114,7 @@ class DiscreteSimulatedBifurcationSampler(dimod.Sampler, dimod.Initialized):
         a0: float = 1,
         Delta_t: float = 1,
         num_reads: Optional[int] = None,
-        num_sweeps: Optional[int] = None,
+        num_sweeps: int = 1,
         a_schedule: Optional[Iterable] = None,
         seed: Optional[int] = None,
         initial_x: Optional[np.ndarray] = None,
@@ -151,8 +151,7 @@ class DiscreteSimulatedBifurcationSampler(dimod.Sampler, dimod.Initialized):
                 performed.
 
             num_sweeps:
-                Number of sweeps used in annealing. If no value is provided
-                and ``Hp_field`` is None the value is defaulted to 1000.
+                Number of sweeps used in annealing. Defaults to 1.
 
             a_schedule:
                 A sequence of values a(n Delta_t) for n=0, .., num_sweeps -1.
@@ -292,7 +291,8 @@ class DiscreteSimulatedBifurcationSampler(dimod.Sampler, dimod.Initialized):
             )
             timestamp_postprocess = perf_counter_ns()
         else:
-            timestamp_postprocess = timestamp_postprocess = perf_counter_ns()
+            num_processed = initial_x.shape[0]
+            timestamp_sample = timestamp_postprocess = perf_counter_ns()
 
         info = {
             "c0": c0,
