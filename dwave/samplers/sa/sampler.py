@@ -106,6 +106,7 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
         beta_range
         beta_schedule
         beta_schedule_type
+        global_spin_flip
         initial_states
         initial_states_generator
         interrupt_function
@@ -149,6 +150,7 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                            'initial_states_generator': [],
                            'randomize_order': [],
                            'proposal_acceptance_criteria': [],
+                           'global_spin_flip': [],
                            }
         self.properties = {'beta_schedule_options': ('linear', 'geometric',
                                                      'custom')}
@@ -166,6 +168,7 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                initial_states_generator: InitialStateGenerator = "random",
                randomize_order: bool = False,
                proposal_acceptance_criteria: str = 'Metropolis',
+               global_spin_flip: bool = False,
                **kwargs) -> dimod.SampleSet:
         r"""Sample from a binary quadratic model.
 
@@ -264,6 +267,13 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                 to the Gibbs criteria.
                 When "Metropolis", each spin flip proposal is accepted according
                 to the Metropolis-Hastings criteria.
+
+            global_spin_flip:
+                When `True`, a global spin-inversion (Wolff-like) move is
+                proposed at the end of each sweep. This accelerates mixing
+                between nearly symmetric states at large Hamming distance (small
+                fields). When `False` (default), no global inversion move is
+                applied.
 
             interrupt_function (function, optional):
                 A function called with no parameters between each sample of
@@ -433,6 +443,7 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
             num_sweeps_per_beta, beta_schedule,
             seed, initial_states_array,
             randomize_order, proposal_acceptance_criteria,
+            global_spin_flip,
             interrupt_function)
         timestamp_postprocess = perf_counter_ns()
 

@@ -73,6 +73,21 @@ double get_flip_energy(
     return -2 * state[var] * energy;
 }
 
+// Returns the energy delta from flipping all variables
+// @param state the current state of all variables
+// @param h vector of h or field value on each variable
+// @return delta energy
+double get_all_flip_energy(
+    std::int8_t *state,
+    const vector<double>& h
+) {
+    double all_flip_energy = 0.0;
+    for (int var = 0; var < h.size(); var++) {
+        all_flip_energy += h[var] * state[var];
+    }
+    return -2 * all_flip_energy;
+}
+
 // Performs a single run of simulated annealing with the given inputs.
 // @param state a int8 array where each int8 holds the state of a
 //        variable. Note that this will be used as the initial state of the
@@ -98,7 +113,8 @@ void simulated_annealing_run(
     const vector<vector<int>>& neighbors,
     const vector<vector<double>>& neighbour_couplings,
     const int sweeps_per_beta,
-    const vector<double>& beta_schedule
+    const vector<double>& beta_schedule,
+    const bool global_spin_flip
 ) {
     const int num_vars = h.size();
 
@@ -114,7 +130,7 @@ void simulated_annealing_run(
         delta_energy[var] = get_flip_energy(var, state, h, degrees,
                                             neighbors, neighbour_couplings);
     }
-
+    double all_flip_energy = get_all_flip_energy(state, h);
     bool flip_spin;
     // perform the sweeps
     for (int beta_idx = 0; beta_idx < (int)beta_schedule.size(); beta_idx++) {
@@ -188,6 +204,28 @@ void simulated_annealing_run(
                     // energy
                     state[var] *= -1;
                     delta_energy[var] *= -1;
+                    // update the whole-state inversion energy delta; state[var]
+                    // is the post-flip value, so the field contribution changes
+                    // by -4 * state[var] * h[var]
+                    all_flip_energy -= 4 * state[var] * h[var];
+                }
+            }
+            if (global_spin_flip) {
+                /*
+                    Poor man's Wolff algorithm, but sufficient to
+                    accelerate mixing for nearly symmetric states at large
+                    Hamming distance (small h). Proposed once per sweep.
+                */
+                FASTRAND(rand);
+                if (RANDMAX > rand * (1+exp(all_flip_energy*beta))) {
+                    all_flip_energy *= -1;
+                    for (int var = 0; var < num_vars; var++) {
+                        state[var] *= -1;
+                        // under a global flip the coupling terms of delta_energy are
+                        // unchanged; only the field term flips, giving a net change
+                        // of -4 * state[var] * h[var] (state[var] post-flip)
+                        delta_energy[var] -= 4 * state[var] * h[var];
+                    }
                 }
             }
         }
@@ -246,6 +284,9 @@ double get_state_energy(
 //        `beta_schedule`.
 // @param beta_schedule A list of the beta values to run `sweeps_per_beta`
 //        sweeps at.
+// @param global_spin_flip When true, a global spin-inversion (Wolff-like) move is
+//        proposed at the end of every sweep to accelerate mixing between
+//        nearly symmetric states.
 // @param interrupt_callback A function that is invoked between each run of simulated annealing
 //        if the function returns True then it will stop running.
 // @param interrupt_function A pointer to contents that are passed to interrupt_callback.
@@ -263,6 +304,7 @@ int general_simulated_annealing(
     const uint64_t seed,
     const VariableOrder varorder,
     const Proposal proposal_acceptance_criteria,
+    const bool global_spin_flip,
     callback interrupt_callback,
     void * const interrupt_function
 ) {
@@ -330,21 +372,25 @@ int general_simulated_annealing(
             if (proposal_acceptance_criteria == Metropolis) {
                 simulated_annealing_run<Random, Metropolis>(state, h, degrees,
                                                     neighbors, neighbour_couplings,
-                                                    sweeps_per_beta, beta_schedule);
+                                                    sweeps_per_beta, beta_schedule,
+                                                    global_spin_flip);
             } else {
                 simulated_annealing_run<Random, Gibbs>(state, h, degrees,
                                                      neighbors, neighbour_couplings,
-                                                     sweeps_per_beta, beta_schedule);
+                                                     sweeps_per_beta, beta_schedule,
+                                                     global_spin_flip);
           }
         } else {
             if (proposal_acceptance_criteria == Metropolis) {
                 simulated_annealing_run<Sequential, Metropolis>(state, h, degrees,
                                                      neighbors, neighbour_couplings,
-                                                     sweeps_per_beta, beta_schedule);
+                                                     sweeps_per_beta, beta_schedule,
+                                                     global_spin_flip);
             } else {
                 simulated_annealing_run<Sequential, Gibbs>(state, h, degrees,
                                                       neighbors, neighbour_couplings,
-                                                      sweeps_per_beta, beta_schedule);
+                                                      sweeps_per_beta, beta_schedule,
+                                                      global_spin_flip);
             }
         }
         // compute the energy of the sample and store it in `energies`
