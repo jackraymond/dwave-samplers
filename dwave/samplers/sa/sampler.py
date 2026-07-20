@@ -116,6 +116,7 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
         proposal_acceptance_criteria
         randomize_order
         seed
+        wolff_cluster_update
         >>> sampler.parameters['beta_range']
         []
         >>> sampler.parameters['beta_schedule_type']
@@ -151,6 +152,7 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                            'randomize_order': [],
                            'proposal_acceptance_criteria': [],
                            'global_spin_flip': [],
+                           'wolff_cluster_update': [],
                            }
         self.properties = {'beta_schedule_options': ('linear', 'geometric',
                                                      'custom')}
@@ -169,6 +171,7 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                randomize_order: bool = False,
                proposal_acceptance_criteria: str = 'Metropolis',
                global_spin_flip: bool = False,
+               wolff_cluster_update: bool = False,
                **kwargs) -> dimod.SampleSet:
         r"""Sample from a binary quadratic model.
 
@@ -274,6 +277,14 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                 between nearly symmetric states at large Hamming distance (small
                 fields). When `False` (default), no global inversion move is
                 applied.
+
+            wolff_cluster_update:
+                When `True`, a Wolff cluster move is proposed at the end of each
+                sweep. A cluster grown from a random seed variable via satisfied
+                bonds is flipped subject to the Metropolis or Gibbs acceptance
+                criteria. When `False` (default), no cluster move is applied. In
+                special circumstances the more efficient global_spin_flip option
+                can be used. 
 
             interrupt_function (function, optional):
                 A function called with no parameters between each sample of
@@ -444,6 +455,7 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
             seed, initial_states_array,
             randomize_order, proposal_acceptance_criteria,
             global_spin_flip,
+            wolff_cluster_update,
             interrupt_function)
         timestamp_postprocess = perf_counter_ns()
 

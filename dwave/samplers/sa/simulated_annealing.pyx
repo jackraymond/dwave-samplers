@@ -39,6 +39,7 @@ cdef extern from "cpu_sa.h" namespace "dwave::samplers::sa":
             const VariableOrder varorder,
             const Proposal proposal_acceptance_criteria,
             const bint global_spin_flip,
+            const bint wolff_cluster_update,
             callback interrupt_callback,
             void *interrupt_function) nogil
 
@@ -49,6 +50,7 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
                         randomize_order=False,
                         proposal_acceptance_criteria='Metropolis',
                         global_spin_flip=False,
+                        wolff_cluster_update=False,
                         interrupt_function=None):
     """Wraps `general_simulated_annealing` from `cpu_sa.cpp`. Accepts
     an Ising problem defined on a general graph and returns samples
@@ -126,6 +128,12 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
         states at large Hamming distance (small ``h``). When False (default), no
         global inversion move is applied.
 
+    wolff_cluster_update: bool
+        When True, a Wolff cluster move is proposed at the end of each sweep. A
+        cluster grown from a random seed variable via satisfied bonds is flipped
+        subject to the Metropolis or Gibbs acceptance criteria. When False
+        (default), no cluster move is applied.
+
     Returns
     -------
     samples : numpy.ndarray
@@ -171,6 +179,7 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
     else:
         raise ValueError(f'Unknown proposal_acceptance_criteria: {proposal_acceptance_criteria}')
     cdef bint _global_spin_flip = global_spin_flip
+    cdef bint _wolff_cluster_update = wolff_cluster_update
     cdef void* _interrupt_function
     if interrupt_function is None:
         _interrupt_function = NULL
@@ -192,6 +201,7 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
                                           _varorder,
                                           _proposal_acceptance_criteria,
                                           _global_spin_flip,
+                                          _wolff_cluster_update,
                                           interrupt_callback,
                                           _interrupt_function)
 
