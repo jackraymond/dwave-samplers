@@ -12,15 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from libc.stdint cimport int8_t
 from libcpp cimport bool
 from libcpp.vector cimport vector
-
-cimport numpy as np
 
 cdef extern from "descent.h" namespace "dwave::samplers::greedy":
 
     unsigned int steepest_gradient_descent(
-        np.int8_t* states,
+        int8_t* states,
         double* energies,
         unsigned* num_steps,
         const int num_samples,

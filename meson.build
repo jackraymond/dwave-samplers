@@ -62,7 +62,7 @@ greedy_dep = declare_dependency(
 py.extension_module(
     'descent',
     'dwave/samplers/greedy/descent.pyx',
-    dependencies: [greedy_dep, numpy_dep],
+    dependencies: [greedy_dep],
     install: true,
     override_options : ['cython_language=cpp'],
     cython_args : ['-Xfreethreading_compatible=True'],
