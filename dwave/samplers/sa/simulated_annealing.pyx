@@ -12,11 +12,11 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+from libc.stdint cimport int8_t
 from libcpp cimport bool
 from libcpp.vector cimport vector
 
 import numpy as np
-cimport numpy as np
 
 
 cdef extern from "cpu_sa.h" namespace "dwave::samplers::sa":
@@ -26,7 +26,7 @@ cdef extern from "cpu_sa.h" namespace "dwave::samplers::sa":
     ctypedef enum VariableOrder:
         Sequential, Random
     int general_simulated_annealing(
-            np.int8_t* samples,
+            int8_t* samples,
             double* energies,
             const int num_samples,
             const vector[double] & h,
@@ -44,7 +44,7 @@ cdef extern from "cpu_sa.h" namespace "dwave::samplers::sa":
 
 def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
                         coupler_weights, sweeps_per_beta, beta_schedule, seed,
-                        np.ndarray[np.int8_t, ndim=2, mode="c"] states_numpy,
+                        int8_t[:, ::1] states_numpy,
                         randomize_order=False,
                         proposal_acceptance_criteria='Metropolis',
                         interrupt_function=None):
@@ -140,7 +140,7 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
     cdef double[:] energies = energies_numpy
 
     # explicitly convert all Python types to C while we have the GIL
-    cdef np.int8_t* _states = &states_numpy[0, 0]
+    cdef int8_t* _states = &states_numpy[0, 0]
     cdef double* _energies = &energies[0]
     cdef int _num_samples = num_samples
     cdef vector[double] _h = h
@@ -186,7 +186,7 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
                                           _interrupt_function)
 
     # discard the noise if we were interrupted
-    return states_numpy[:num], energies_numpy[:num]
+    return np.asarray(states_numpy[:num]), np.asarray(energies_numpy[:num])
 
 
 cdef bool interrupt_callback(void * const interrupt_function) noexcept with gil:

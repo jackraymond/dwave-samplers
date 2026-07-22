@@ -90,7 +90,7 @@ sa_dep = declare_dependency(
 py.extension_module(
     'simulated_annealing',
     'dwave/samplers/sa/simulated_annealing.pyx',
-    dependencies: [numpy_dep, sa_dep],
+    dependencies: [sa_dep],
     install: true,
     override_options : ['cython_language=cpp'],
     cython_args : ['-Xfreethreading_compatible=True'],
