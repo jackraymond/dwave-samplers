@@ -152,9 +152,22 @@ class RandomSampler(dimod.Sampler):
         if max_num_samples <= 0:
             raise ValueError("max_num_samples must be a positive integer")
 
-        return sample(bqm,
-                      num_reads=num_reads,
-                      time_limit=time_limit,
-                      max_num_samples=max_num_samples,
-                      seed=seed,
-                      )
+        samples, energies, info = sample(
+            dimod.as_bqm(bqm, dimod.BINARY, dtype=float).data,
+            num_reads=num_reads,
+            time_limit=time_limit,
+            max_num_samples=max_num_samples,
+            batch_size=min(num_reads, 1000),  # 1000 is arbitrary and could be tuned
+            seed=seed,
+        )
+
+        if bqm.vartype is dimod.SPIN:
+            samples *= 2
+            samples -= 1
+
+        return dimod.SampleSet.from_samples(
+            (samples, bqm.variables),
+            bqm.vartype,
+            energy=energies,
+            info=info,
+        )

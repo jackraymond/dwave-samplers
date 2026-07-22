@@ -74,7 +74,7 @@ py.extension_module(
 py.extension_module(
     'cyrandom',
     'dwave/samplers/random/cyrandom.pyx',
-    dependencies: [dimod_dep, numpy_dep],
+    dependencies: [dimod_dep],
     install: true,
     override_options : ['cython_language=cpp'],
     cython_args : ['-Xfreethreading_compatible=True'],
