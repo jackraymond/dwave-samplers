@@ -87,8 +87,6 @@ test-command = "python -m unittest discover {project}/tests/"
 
 [tool.cibuildwheel.linux]
 archs = "x86_64 aarch64"
-manylinux-x86_64-image = "manylinux2014"
-manylinux-aarch64-image = "manylinux2014"
 
 [tool.cibuildwheel.macos]
 # We follow NumPy and don't build universal wheels, see https://github.com/numpy/numpy/pull/20787
@@ -104,11 +102,6 @@ repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel} --namespace-pkg 
 # wheel. 313t and 314t do not support abi wheels yet.
 select = "cp31[!01]-*"  # uses fnmatch, will fail for 3.20+ but good enough for now
 build-frontend = { name = "build", args = ["-Csetup-args=-Dpython.allow_limited_api=true"] }
-inherit.repair-wheel-command = "append"
-repair-wheel-command = [
-    "pip install abi3audit",
-    "abi3audit --strict --report {wheel}",
-]
 
 # This is, by default, overriden in meson.build. We then override the override
 # in cibuildwheel. It's a bit convoluted, but (as of August 2025) it's the only

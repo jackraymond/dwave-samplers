@@ -10,7 +10,7 @@ commands:
     parameters:
       cibw-version:
         type: string
-        default: 3.4.0    # latest as of March 2026
+        default: 4.1.0    # latest as of July 2026
     steps:
       - run:
           name: run cibuildwheel

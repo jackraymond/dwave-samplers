@@ -1,0 +1,5 @@
+---
+upgrade:
+  - |
+    Let ``cibuildwheel`` determine the manylinux image type.
+    As of July 2026, the default is ``manylinux_2_28``.
