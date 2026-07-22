@@ -262,10 +262,15 @@ workflows:
             - build-and-test-linux
           matrix:
             parameters:
-              dependency-versions: [dimod==0.12.21 oldest-supported-numpy networkx==3.0, dimod numpy networkx]
+              dependency-versions: [dimod==0.12.21 numpy==2 networkx==3, dimod numpy networkx]
               # Skip some of the intermediate Python versions for speed
               python-version: ["3.10", "3.14"]
               only-binary: ["numpy,dimod,networkx"]
+            exclude:
+              # Python 3.14 doesn't support Numpy 2.0
+              - dependency-versions: "dimod==0.12.21 numpy==2 networkx==3"
+                python-version: "3.14"
+                only-binary: "numpy,dimod,networkx"
       - test-linux-cpp:
           filters: *tags
       - test-sdist:
