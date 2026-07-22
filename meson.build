@@ -44,12 +44,6 @@ dimod_dep = declare_dependency(
         ['-c', 'import os.path; import dimod; print(os.path.relpath(dimod.get_include()))'],
       ).stdout().strip(),
 )
-numpy_dep = declare_dependency(
-    include_directories: run_command(
-        py,
-        ['-c', 'import os.path; import numpy as np; print(os.path.relpath(np.get_include()))'],
-      ).stdout().strip(),
-)
 
 # Ok, now we can build each of our samplers one-by-one. They all have some idiosyncratic
 # build needs so we do them individually.

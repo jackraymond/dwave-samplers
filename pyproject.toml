@@ -6,7 +6,6 @@ requires = [
     "meson~=1.10.2",  # latest as of March 2026
     "meson-python~=0.19.0",  # latest as of March 2026
     "ninja~=1.13.0",  # latest as of March 2026
-    "numpy~=2.0",
 ]
 build-backend = "mesonpy"
 
@@ -58,7 +57,6 @@ build = [
     "meson~=1.9.0",
     "meson-python~=0.18.0",
     "ninja~=1.13.0",
-    "numpy~=2.0",
 ]
 changelog = [
     "reno==4.1.0",
