@@ -249,13 +249,13 @@ exactly.
 Installation
 ============
 
-To install the core package:
+To install the package from PyPI:
 
 .. code-block:: bash
 
     pip install dwave-samplers
 
-During package development, it is often convenient to use an editable install.
+During package development, it is often convenient to use an editable install (from source).
 See `meson-python's editable installs
 <https://meson-python.readthedocs.io/en/latest/how-to-guides/editable-installs.html>`_
 for more details.
