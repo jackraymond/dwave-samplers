@@ -109,7 +109,7 @@ sqa_dep = declare_dependency(
 py.extension_module(
     'pimc_annealing',
     'dwave/samplers/sqa/pimc_annealing.pyx',
-    dependencies: [numpy_dep, sqa_dep],
+    dependencies: [sqa_dep],
     install: true,
     override_options : ['cython_language=cpp'],
     cython_args : ['-Xfreethreading_compatible=True'],
@@ -119,7 +119,7 @@ py.extension_module(
 py.extension_module(
     'rotormc_annealing',
     'dwave/samplers/sqa/rotormc_annealing.pyx',
-    dependencies: [numpy_dep, sqa_dep],
+    dependencies: [sqa_dep],
     install: true,
     override_options : ['cython_language=cpp'],
     cython_args : ['-Xfreethreading_compatible=True'],

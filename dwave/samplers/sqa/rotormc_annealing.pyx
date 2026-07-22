@@ -17,12 +17,11 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+from libc.stdint cimport uint8_t
 from libcpp cimport bool
 from libcpp.vector cimport vector
 
 import numpy as np
-cimport numpy as np
-
 
 cdef extern from "cpu_rotormc.h" namespace "dwave::samplers::sqa":
     ctypedef bool (*callback)(void *function)
@@ -31,7 +30,7 @@ cdef extern from "cpu_rotormc.h" namespace "dwave::samplers::sqa":
         MetropolisUniform, MetropolisTF
     
     int general_simulated_annealing(
-            np.uint8_t* samples,
+            uint8_t* samples,
             double* energies,
             const int num_samples,
             const vector[double] & h,
@@ -45,7 +44,7 @@ cdef extern from "cpu_rotormc.h" namespace "dwave::samplers::sqa":
             const unsigned long long seed,
             const bool randomize_order,
             const Proposal proposal_acceptance_criteria,
-            np.uint8_t *statistics,
+            uint8_t *statistics,
             const int schedule_sample_interval,
             callback interrupt_callback,
             void *interrupt_function) nogil
@@ -55,7 +54,7 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
                         coupler_weights, trans_fields, sweeps_per_beta,
                         Hp_field, Hd_field,
                         seed,
-                        np.ndarray[np.uint8_t, ndim=2, mode="c"] states_numpy,
+                        uint8_t[:, ::1] states_numpy,
                         randomize_order,
                         proposal_acceptance_criteria,
                         schedule_sample_interval,
@@ -122,7 +121,7 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
         parameters are the same, the returned samples will be
         identical.
 
-    states_numpy : np.ndarray[np.uint8_t, ndim=2, mode="c"], values in (-1, 1)
+    states_numpy : np.ndarray[uint8_t, ndim=2, mode="c"], values in (-1, 1)
         The initial seeded states of the simulated annealing runs. Should be of
         a contiguous numpy.ndarray of shape (num_samples, num_variables).
 
@@ -151,7 +150,7 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
         [independent processes x MCMC steps tracked]
         by [vector of statistics].
         For now, statistics are mid-anneal samples only, and so the
-        type is np.uint8_t for compression purposes.
+        type is uint8_t for compression purposes.
 
     """
     num_vars = len(h)
@@ -177,12 +176,12 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
         stat_size = (num_samples, num_collection_points, num_statistics)
     else:
         stat_size = (num_samples, 1, 1) # Non-empty owing to addressing issue..
-    cdef np.ndarray[np.uint8_t, ndim=3, mode='c'] statistics_numpy = np.empty(stat_size, dtype=np.uint8)
+    cdef uint8_t[:, :, ::1] statistics_numpy = np.empty(stat_size, dtype=np.uint8)
     # explicitly convert all Python types to C while we have the GIL
     
-    cdef np.uint8_t* _states = &states_numpy[0, 0]
+    cdef uint8_t* _states = &states_numpy[0, 0]
     cdef double* _energies = &energies[0]
-    cdef np.uint8_t* _statistics = &statistics_numpy[0, 0, 0]
+    cdef uint8_t* _statistics = &statistics_numpy[0, 0, 0]
     cdef int _num_samples = num_samples
     cdef vector[double] _h = h
     cdef vector[int] _coupler_starts = coupler_starts
@@ -233,7 +232,11 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
                                           _interrupt_function)
 
     # discard the noise if we were interrupted
-    return states_numpy[:num], energies_numpy[:num], statistics_numpy[:num]
+    return (
+        np.asarray(states_numpy[:num]),
+        np.asarray(energies_numpy[:num]),
+        np.asarray(statistics_numpy[:num]),
+    )
 
 cdef bool interrupt_callback(void * const interrupt_function) noexcept with gil:
     try:
