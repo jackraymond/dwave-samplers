@@ -154,7 +154,7 @@ tree_dep = declare_dependency(
 py.extension_module(
     'sample',
     'dwave/samplers/tree/sample.pyx',
-    dependencies: [dimod_dep, numpy_dep, tree_dep],
+    dependencies: [dimod_dep, tree_dep],
     install: true,
     override_options : ['cython_language=cpp'],
     cython_args : ['-Xfreethreading_compatible=True'],
@@ -164,7 +164,7 @@ py.extension_module(
 py.extension_module(
     'solve',
     'dwave/samplers/tree/solve.pyx',
-    dependencies: [dimod_dep, numpy_dep, tree_dep],
+    dependencies: [dimod_dep, tree_dep],
     install: true,
     override_options : ['cython_language=cpp'],
     cython_args : ['-Xfreethreading_compatible=True'],

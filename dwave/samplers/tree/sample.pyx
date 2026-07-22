@@ -12,22 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Tuple
 from libcpp cimport bool
-from libc.stdlib cimport free
-
-
-import numpy as np
-import dimod
-from dimod.binary.binary_quadratic_model import BinaryQuadraticModel
 
 cimport cython
-cimport numpy as np
+import numpy as np
+import dimod
+
 from cython.operator cimport dereference as deref
 from dimod cimport cyBQM_float64
+from dimod.binary.binary_quadratic_model import BinaryQuadraticModel
 from dimod.libcpp cimport BinaryQuadraticModel as cppBinaryQuadraticModel
-
-from dwave.samplers.tree.orang cimport samples_type, PyArray_ENABLEFLAGS
 
 cdef extern from "sample.hpp":
     void sampleBQM[V, B](cppBinaryQuadraticModel[B, V]& refBQM,
@@ -51,7 +45,7 @@ def sample_bqm_wrapper(bqm: BinaryQuadraticModel,
                        order: list,
                        marginals: bool = False,
                        num_reads: int = 1,
-                       seed: float = None) -> Tuple[np.ndarray, dict]:
+                       seed: float = None) -> tuple[np.ndarray, dict]:
     """Cython wrapper for :func:`sampleBQM`.
 
     Args:
@@ -107,7 +101,7 @@ def sample_bqm_wrapper(bqm: BinaryQuadraticModel,
 
     # samples
     cdef int srows, scols
-    cdef samples_type* samples_pointer
+    cdef int* samples_pointer
 
     # marginals
     cdef double* single_marginals_pointer
@@ -135,8 +129,7 @@ def sample_bqm_wrapper(bqm: BinaryQuadraticModel,
 
     # create a numpy array without making a copy then tell numpy it needs to
     # free the memory
-    samples = np.asarray(<samples_type[:srows, :scols]> samples_pointer)
-    PyArray_ENABLEFLAGS(samples, np.NPY_ARRAY_OWNDATA)
+    samples = np.asarray(<int[:srows, :scols]> samples_pointer, copy=True)
 
     # convert the samples to spin if necessary
     cdef size_t i, j
@@ -147,18 +140,18 @@ def sample_bqm_wrapper(bqm: BinaryQuadraticModel,
                     samples[i, j] = -1
 
     if marginals:
-        variable_marginals = np.asarray(<double[:smlen]> single_marginals_pointer)
-        PyArray_ENABLEFLAGS(variable_marginals, np.NPY_ARRAY_OWNDATA)
+        variable_marginals = np.asarray(<double[:smlen]> single_marginals_pointer, copy=True)
 
         if pmrows * pmcols:
-            interaction_marginals = np.asarray(<double[:pmrows, :pmcols]> pair_marginals_pointer)
-            PyArray_ENABLEFLAGS(interaction_marginals, np.NPY_ARRAY_OWNDATA)
+            interaction_marginals = np.asarray(
+                <double[:pmrows, :pmcols]> pair_marginals_pointer,
+                copy=True,
+            )
         else:
             interaction_marginals = np.empty(shape=(pmrows, pmcols), dtype=np.double)
 
         if prows * pcols:
-            interactions = np.asarray(<int[:prows, :pcols]> pair_pointer)
-            PyArray_ENABLEFLAGS(interactions, np.NPY_ARRAY_OWNDATA)
+            interactions = np.asarray(<int[:prows, :pcols]> pair_pointer, copy=True)
         else:
             interactions = np.empty(shape=(prows, pcols), dtype=np.double)
 
