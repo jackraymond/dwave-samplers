@@ -1,0 +1,5 @@
+---
+features:
+  - Drop NumPy build requirement. ``dwave-samplers`` still requires NumPy at runtime.
+other:
+  - The performance of the ``RandomSampler`` may change for some inputs.

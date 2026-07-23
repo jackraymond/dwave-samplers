@@ -44,12 +44,6 @@ dimod_dep = declare_dependency(
         ['-c', 'import os.path; import dimod; print(os.path.relpath(dimod.get_include()))'],
       ).stdout().strip(),
 )
-numpy_dep = declare_dependency(
-    include_directories: run_command(
-        py,
-        ['-c', 'import os.path; import numpy as np; print(os.path.relpath(np.get_include()))'],
-      ).stdout().strip(),
-)
 
 # Ok, now we can build each of our samplers one-by-one. They all have some idiosyncratic
 # build needs so we do them individually.
@@ -62,7 +56,7 @@ greedy_dep = declare_dependency(
 py.extension_module(
     'descent',
     'dwave/samplers/greedy/descent.pyx',
-    dependencies: [greedy_dep, numpy_dep],
+    dependencies: [greedy_dep],
     install: true,
     override_options : ['cython_language=cpp'],
     cython_args : ['-Xfreethreading_compatible=True'],
@@ -74,7 +68,7 @@ py.extension_module(
 py.extension_module(
     'cyrandom',
     'dwave/samplers/random/cyrandom.pyx',
-    dependencies: [dimod_dep, numpy_dep],
+    dependencies: [dimod_dep],
     install: true,
     override_options : ['cython_language=cpp'],
     cython_args : ['-Xfreethreading_compatible=True'],
@@ -90,7 +84,7 @@ sa_dep = declare_dependency(
 py.extension_module(
     'simulated_annealing',
     'dwave/samplers/sa/simulated_annealing.pyx',
-    dependencies: [numpy_dep, sa_dep],
+    dependencies: [sa_dep],
     install: true,
     override_options : ['cython_language=cpp'],
     cython_args : ['-Xfreethreading_compatible=True'],
@@ -109,7 +103,7 @@ sqa_dep = declare_dependency(
 py.extension_module(
     'pimc_annealing',
     'dwave/samplers/sqa/pimc_annealing.pyx',
-    dependencies: [numpy_dep, sqa_dep],
+    dependencies: [sqa_dep],
     install: true,
     override_options : ['cython_language=cpp'],
     cython_args : ['-Xfreethreading_compatible=True'],
@@ -119,7 +113,7 @@ py.extension_module(
 py.extension_module(
     'rotormc_annealing',
     'dwave/samplers/sqa/rotormc_annealing.pyx',
-    dependencies: [numpy_dep, sqa_dep],
+    dependencies: [sqa_dep],
     install: true,
     override_options : ['cython_language=cpp'],
     cython_args : ['-Xfreethreading_compatible=True'],
@@ -154,7 +148,7 @@ tree_dep = declare_dependency(
 py.extension_module(
     'sample',
     'dwave/samplers/tree/sample.pyx',
-    dependencies: [dimod_dep, numpy_dep, tree_dep],
+    dependencies: [dimod_dep, tree_dep],
     install: true,
     override_options : ['cython_language=cpp'],
     cython_args : ['-Xfreethreading_compatible=True'],
@@ -164,7 +158,7 @@ py.extension_module(
 py.extension_module(
     'solve',
     'dwave/samplers/tree/solve.pyx',
-    dependencies: [dimod_dep, numpy_dep, tree_dep],
+    dependencies: [dimod_dep, tree_dep],
     install: true,
     override_options : ['cython_language=cpp'],
     cython_args : ['-Xfreethreading_compatible=True'],

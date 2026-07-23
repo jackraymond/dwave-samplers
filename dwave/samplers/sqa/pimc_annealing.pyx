@@ -17,18 +17,18 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+from libc.stdint cimport int8_t
 from libcpp cimport bool
 from libcpp.vector cimport vector
 
 import numpy as np
-cimport numpy as np
 
 
 cdef extern from "localPIMC.h" namespace "dwave::samplers::sqa":
     ctypedef bool (*callback)(void *function)
 
     int general_simulated_annealing(
-            np.int8_t* samples,
+            int8_t* samples,
             double* energies,
             const bool project_inputs,
             const bool project_outputs,
@@ -49,7 +49,7 @@ cdef extern from "localPIMC.h" namespace "dwave::samplers::sqa":
             const int qubits_per_chain,
             const int qubits_per_update,
             const unsigned int seed,
-            np.int8_t *statistics,
+            int8_t *statistics,
             const int schedule_sample_interval,
             callback interrupt_callback,
             void *interrupt_function) nogil
@@ -63,12 +63,12 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
                         qubits_per_chain,
                         qubits_per_update,
                         seed,
-                        np.ndarray[np.int8_t, ndim=2, mode="c"] states_numpy,
+                        int8_t[:, ::1] states_numpy,
                         project_inputs,
                         project_outputs,
-                        np.ndarray[int, ndim=2, mode="c"] num_breaks_numpy,
-                        np.ndarray[int, ndim=1, mode="c"] breaks_in_numpy,
-                        np.ndarray[int, ndim=1, mode="c"] breaks_buffer_out_numpy,
+                        int[:, ::1] num_breaks_numpy,
+                        int[::1] breaks_in_numpy,
+                        int[::1] breaks_buffer_out_numpy,
                         schedule_sample_interval,
                         interrupt_function=None):
     """Wraps `general_simulated_annealing` from `localPIMC.cpp`. Accepts
@@ -133,7 +133,7 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
         parameters are the same, the returned samples will be
         identical.
 
-    states_numpy : np.ndarray[np.int8_t, ndim=2, mode="c"], values in (-1, 1)
+    states_numpy : np.ndarray[int8_t, ndim=2, mode="c"], values in (-1, 1)
         The initial seeded states of the simulated annealing runs. Should be of
         a contiguous numpy.ndarray of shape (num_samples, num_variables).
 
@@ -179,7 +179,7 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
         [independent processes x MCMC steps tracked]
         by [vector of statistics].
         For now, statistics are mid-anneal samples only, and so the
-        type is np.int8_t for compression purposes.
+        type is int8_t for compression purposes.
         
     num_breaks: np.ndarray
        A 2D numpy array where each row specifies a Trotterized sample in 
@@ -216,18 +216,18 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
         stat_size = (num_samples, num_collection_points, num_statistics)
     else:
         stat_size = (num_samples, 1, 1) # Non-empty owing to addressing issue..
-    cdef np.ndarray[np.int8_t, ndim=3, mode='c'] statistics_numpy;
-    statistics_numpy  = np.empty(stat_size, dtype=np.int8)
+    cdef int8_t[:, :, ::1] statistics_numpy;
+    statistics_numpy = np.empty(stat_size, dtype=np.int8)
 
     # explicitly convert all Python types to C while we have the GIL
     
-    cdef np.int8_t* _states = &states_numpy[0, 0]
+    cdef int8_t* _states = &states_numpy[0, 0]
     cdef int* _num_breaks = &num_breaks_numpy[0, 0]
     cdef int* _breaks_in = &breaks_in_numpy[0]
     cdef int* _breaks_buffer_out = &breaks_buffer_out_numpy[0]
     cdef int _breaks_buffer_size = len(breaks_buffer_out_numpy)
     cdef double* _energies = &energies[0]
-    cdef np.int8_t* _statistics = &statistics_numpy[0, 0, 0]
+    cdef int8_t* _statistics = &statistics_numpy[0, 0, 0]
     cdef int _num_samples = num_samples
     cdef vector[double] _h = h
     cdef vector[int] _coupler_starts = coupler_starts
@@ -277,7 +277,13 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
                                           interrupt_callback,
                                           _interrupt_function)
     # discard the noise if we were interrupted
-    return states_numpy[:num], energies_numpy[:num], statistics_numpy[:num], num_breaks_numpy[:num], breaks_buffer_out_numpy
+    return (
+        np.asarray(states_numpy[:num]),
+        np.asarray(energies_numpy[:num]),
+        np.asarray(statistics_numpy[:num]),
+        np.asarray(num_breaks_numpy[:num]),
+        np.asarray(breaks_buffer_out_numpy),
+    )
 
 cdef bool interrupt_callback(void * const interrupt_function) noexcept with gil:
     try:
