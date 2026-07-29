@@ -33,7 +33,7 @@ namespace dwave::samplers::sa {
     rand = rng_state[1] + y;                      \
 } while (0)
 
-#define RANDMAX ((uint64_t)-1L)
+#define RANDMAX (static_cast<double>((uint64_t)-1L))
 
 using namespace std;
 

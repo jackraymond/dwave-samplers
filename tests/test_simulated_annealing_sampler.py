@@ -36,7 +36,9 @@ class TestTimingInfo(unittest.TestCase):
 
         self.sample_sets = []
         for bqm in [empty, one, two]:
-            sample_set = sampler.sample(bqm, seed=rng.integers(2**30))
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                sample_set = sampler.sample(bqm, seed=rng.integers(2**30))
             self.sample_sets.append(sample_set)
 
         self.timing_keys = {"preprocessing_ns", "postprocessing_ns", "sampling_ns"}

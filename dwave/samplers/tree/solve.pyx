@@ -97,7 +97,6 @@ def solve_bqm_wrapper(bqm: BinaryQuadraticModel,
     samples = np.asarray(<samples_type[:srows, :scols]> samples_pointer, copy=True)
 
     # convert the samples to spin if necessary
-    cdef size_t i, j
     if low == -1:
         for i in range(srows):
             for j in range(scols):
