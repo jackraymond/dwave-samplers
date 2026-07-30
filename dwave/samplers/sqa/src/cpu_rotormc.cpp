@@ -332,7 +332,7 @@ double get_state_energyQ(std::uint8_t* state,
                          const vector<double>& trans_fields,
                          const vector<double>& state_to_sintheta) {
   double en = 0;
-  for(int var = 0; var < trans_fields.size(); var++) {
+  for(int var = 0, size = trans_fields.size(); var < size; var++) {
     en += trans_fields[var]*state_to_sintheta[state[var]];
   }
   return(en);

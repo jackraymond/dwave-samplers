@@ -52,7 +52,7 @@ double get_flip_energy(
     // flip energy = delta * h[var]
     //             + sum_over_var_neighbors(delta * J[var][neigh] * state[neigh]))
     double contrib = linear_biases[var];
-    for (int idx = 0; idx < neighbors[var].size(); idx++) {
+    for (int idx = 0, size = neighbors[var].size(); idx < size; idx++) {
         contrib += state[neighbors[var][idx]] * neighbour_couplings[var][idx];
     }
 
@@ -170,7 +170,7 @@ unsigned int steepest_gradient_descent_solver(
         // all neighbors of the flipped var
         flip_energies[best_var] *= -1;
 
-        for (int n_idx = 0; n_idx < neighbors[best_var].size(); n_idx++) {
+        for (int n_idx = 0, size = neighbors[best_var].size(); n_idx < size; n_idx++) {
             int n_var = neighbors[best_var][n_idx];
             double w = neighbour_couplings[best_var][n_idx];
             // flip energy for each `neighbor` includes the
@@ -272,7 +272,7 @@ unsigned int steepest_gradient_descent_ls_solver(
 
         // update flip energies (and their ordered set) of all `best_var`'s
         // neighbors ~ O(max_degree * logN)
-        for (int n_idx = 0; n_idx < neighbors[best_var].size(); n_idx++) {
+        for (int n_idx = 0, size = neighbors[best_var].size(); n_idx < size; n_idx++) {
             int n_var = neighbors[best_var][n_idx];
             double w = neighbour_couplings[best_var][n_idx];
             // flip energy for each `neighbor` includes the

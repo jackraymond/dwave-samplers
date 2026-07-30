@@ -201,7 +201,7 @@ jobs:
     docker:
       - image: cimg/python:3.12
 
-    steps:
+    steps: &cpp-tests
       - checkout
 
       - run:
@@ -216,8 +216,23 @@ jobs:
           name: run cpp tests
           command: |
             . env/bin/activate
-            meson setup _build -Dbuildtype=debug
+            meson setup _build -Dwerror=true -Dbuild-tests="enabled"
+            meson compile -C _build
             meson test -C _build
+
+      - run:
+          name: run cpp tests with debug symbols
+          command: |
+            . env/bin/activate
+            meson setup _build -Dbuildtype=debug --reconfigure
+            meson compile -C _build
+            meson test -C _build
+
+  test-osx-cpp:
+    macos:
+      xcode: 26.2.0  # latest as of Jan 2026
+
+    steps: *cpp-tests
 
   test-sdist:
     docker:
@@ -272,6 +287,8 @@ workflows:
                 python-version: "3.14"
                 only-binary: "numpy,dimod,networkx"
       - test-linux-cpp:
+          filters: *tags
+      - test-osx-cpp:
           filters: *tags
       - test-sdist:
           filters: *tags

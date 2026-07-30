@@ -40,7 +40,7 @@ TabuSearch::TabuSearch(vector<vector<double>> Q,
     if (initSol.size() != nvars)
         throw Exception("length of init_solution doesn't match the size of Q");
 
-    if (tenure < 0 || tenure > (nvars - 1)) {
+    if (tenure < 0 || (size_t)tenure > (nvars - 1)) {
         throw Exception("tenure must be in the range [0, num_vars - 1]");
     }
     else if (tenure > 0) {

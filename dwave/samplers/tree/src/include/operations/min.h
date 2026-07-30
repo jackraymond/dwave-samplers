@@ -131,7 +131,6 @@ private:
   }
 
   virtual void solveImpl(solution_type& solSet) const {
-    typedef typename solution_type::solution_type single_solution_type;
     typedef typename solution_type::solution_set solution_set;
 
     solution_set inSolSet;
