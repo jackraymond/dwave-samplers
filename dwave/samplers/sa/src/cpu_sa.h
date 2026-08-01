@@ -56,8 +56,9 @@ void simulated_annealing_run(
     const std::vector<std::vector<double>>& neighbour_couplings,
     const int sweeps_per_beta,
     const std::vector<double>& beta_schedule,
-    const bool global_spin_flip,
-    const bool wolff_cluster_update
+    const bool single_spin_flip_proposals,
+    const bool global_spin_flip_proposals,
+    const bool wolff_cluster_proposals
 );
 
 typedef bool (*const callback)(void * const function);
@@ -75,8 +76,9 @@ int general_simulated_annealing(
     const uint64_t seed,
     const VariableOrder varorder,
     const Proposal proposal_acceptance_criteria,
-    const bool global_spin_flip,
-    const bool wolff_cluster_update,
+    const bool single_spin_flip_proposals,
+    const bool global_spin_flip_proposals,
+    const bool wolff_cluster_proposals,
     callback interrupt_callback,
     void * const interrupt_function
 );
