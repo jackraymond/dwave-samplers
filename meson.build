@@ -24,7 +24,7 @@ py = import('python').find_installation(pure: false)
 
 cpp = meson.get_compiler('cpp')
 if cpp.has_argument('-g1')
-  add_project_arguments('-g1', language: 'cpp')
+    add_project_arguments('-g1', language: 'cpp')
 endif
 
 # Declare our C++ libraries as dependencies (for those samplers that have one).
