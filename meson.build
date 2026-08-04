@@ -10,7 +10,7 @@ project(
         'warning_level=1',  # equivalent to -Wall. We should consider cranking it up to 3
         'python.allow_limited_api=false',  # Our build system can then opt-in for Python 3.12+
     ],
-    meson_version: '>= 1.3.0',
+    meson_version: '>= 1.10.0',
     # As of March 2026, there is no nicer way that I know of to dynamically get the version
     version: run_command(
         ['dwave/samplers/_build/_version.py'],
@@ -19,80 +19,25 @@ project(
     ).stdout(),
 )
 
-add_project_arguments(['-g1'], language: ['cpp'])
-
-# Get access to Python
+# Configure and/or get access to our languages
 py = import('python').find_installation(pure: false)
 
-# We build the limited API when we have Python>=3.12, which is the lowest
-# version that Cython makes use of vectorcall.
-# See https://cython.readthedocs.io/en/stable/src/userguide/limited_api.html
-# By default this will do nothing unless the user overrides the
-# python.allow_limited_api=false we specify above, which we do when building
-# with cibuildwheel
-if py.version().version_compare('>=3.12')
-    limited_api = '3.12'
-else
-    limited_api = ''  # i.e. no limited api
+cpp = meson.get_compiler('cpp')
+if cpp.has_argument('-g1')
+  add_project_arguments('-g1', language: 'cpp')
 endif
 
-# We need the include files from NumPy and/or dimod for some of our Cython extensions.
-# So let's get them and save the information for later.
-dimod_dep = declare_dependency(
-    include_directories: run_command(
-        py,
-        ['-c', 'import os.path; import dimod; print(os.path.relpath(dimod.get_include()))'],
-      ).stdout().strip(),
-)
-
-# Ok, now we can build each of our samplers one-by-one. They all have some idiosyncratic
-# build needs so we do them individually.
-
-# -- Greedy
+# Declare our C++ libraries as dependencies (for those samplers that have one).
+# We want these each to be a separate dependency so that other packages can use
+# dwave-samplers as a subproject to build against them.
 greedy_dep = declare_dependency(
     include_directories: ['dwave/samplers/greedy/src/'],
     sources: ['dwave/samplers/greedy/src/descent.cpp'],
 )
-py.extension_module(
-    'descent',
-    'dwave/samplers/greedy/descent.pyx',
-    dependencies: [greedy_dep],
-    install: true,
-    override_options : ['cython_language=cpp'],
-    cython_args : ['-Xfreethreading_compatible=True'],
-    subdir: 'dwave/samplers/greedy',
-    limited_api: limited_api,
-)
-
-# -- Random
-py.extension_module(
-    'cyrandom',
-    'dwave/samplers/random/cyrandom.pyx',
-    dependencies: [dimod_dep],
-    install: true,
-    override_options : ['cython_language=cpp'],
-    cython_args : ['-Xfreethreading_compatible=True'],
-    subdir: 'dwave/samplers/random',
-    limited_api: limited_api,
-)
-
-# -- Simulated Annealing
 sa_dep = declare_dependency(
     include_directories: ['dwave/samplers/sa/src/'],
     sources: ['dwave/samplers/sa/src/cpu_sa.cpp'],
 )
-py.extension_module(
-    'simulated_annealing',
-    'dwave/samplers/sa/simulated_annealing.pyx',
-    dependencies: [sa_dep],
-    install: true,
-    override_options : ['cython_language=cpp'],
-    cython_args : ['-Xfreethreading_compatible=True'],
-    subdir: 'dwave/samplers/sa',
-    limited_api: limited_api,
-)
-
-# -- Simulated Quantum Annealing
 sqa_dep = declare_dependency(
     include_directories: ['dwave/samplers/sqa/src/'],
     sources: [
@@ -100,28 +45,6 @@ sqa_dep = declare_dependency(
         'dwave/samplers/sqa/src/localPIMC.cpp',
     ],
 )
-py.extension_module(
-    'pimc_annealing',
-    'dwave/samplers/sqa/pimc_annealing.pyx',
-    dependencies: [sqa_dep],
-    install: true,
-    override_options : ['cython_language=cpp'],
-    cython_args : ['-Xfreethreading_compatible=True'],
-    subdir: 'dwave/samplers/sqa',
-    limited_api: limited_api,
-)
-py.extension_module(
-    'rotormc_annealing',
-    'dwave/samplers/sqa/rotormc_annealing.pyx',
-    dependencies: [sqa_dep],
-    install: true,
-    override_options : ['cython_language=cpp'],
-    cython_args : ['-Xfreethreading_compatible=True'],
-    subdir: 'dwave/samplers/sqa',
-    limited_api: limited_api,
-)
-
-# -- Tabu
 tabu_dep = declare_dependency(
     include_directories: ['dwave/samplers/tabu/src/'],
     sources: [
@@ -130,51 +53,117 @@ tabu_dep = declare_dependency(
         'dwave/samplers/tabu/src/tabu_utils.cpp',
     ],
 )
-py.extension_module(
-    'tabu_search',
-    'dwave/samplers/tabu/tabu_search.pyx',
-    dependencies: [tabu_dep],
-    install: true,
-    override_options : ['cython_language=cpp'],
-    cython_args : ['-Xfreethreading_compatible=True'],
-    subdir: 'dwave/samplers/tabu',
-    limited_api: limited_api,
-)
-
-# -- Tree
 tree_dep = declare_dependency(
     include_directories: ['dwave/samplers/tree/src/include/'],
 )
-py.extension_module(
-    'sample',
-    'dwave/samplers/tree/sample.pyx',
-    dependencies: [dimod_dep, tree_dep],
-    install: true,
-    override_options : ['cython_language=cpp'],
-    cython_args : ['-Xfreethreading_compatible=True'],
-    subdir: 'dwave/samplers/tree',
-    limited_api: limited_api,
-)
-py.extension_module(
-    'solve',
-    'dwave/samplers/tree/solve.pyx',
-    dependencies: [dimod_dep, tree_dep],
-    install: true,
-    override_options : ['cython_language=cpp'],
-    cython_args : ['-Xfreethreading_compatible=True'],
-    subdir: 'dwave/samplers/tree',
-    limited_api: limited_api,
-)
-py.extension_module(
-    'utilities',
-    'dwave/samplers/tree/utilities.pyx',
-    dependencies: [dimod_dep],
-    install: true,
-    override_options : ['cython_language=cpp'],
-    cython_args : ['-Xfreethreading_compatible=True'],
-    subdir: 'dwave/samplers/tree',
-    limited_api: limited_api,
-)
+
+# Now the Cython modules that are used in the Python package.
+# The build-extensions option toggles this off to save time for packages that
+# use dwave-samplers as a subproject for the C++ dependencies.
+if get_option('build-extensions')
+    extension_kwargs = {
+        'install': true,
+        'override_options' : ['cython_language=cpp'],
+        'cython_args' : ['-Xfreethreading_compatible=True'],
+    }
+
+    # We build the limited API when we have Python>=3.12, which is the lowest
+    # version that Cython makes use of vectorcall.
+    # See https://cython.readthedocs.io/en/stable/src/userguide/limited_api.html
+    # By default this will do nothing unless the user overrides the
+    # python.allow_limited_api=false we specify above, which we do when building
+    # with cibuildwheel
+    if py.version().version_compare('>=3.12')
+        extension_kwargs += {'limited_api': '3.12'}
+    endif
+
+    # We need the include files from dimod for some of our Cython extensions.
+    dimod_dep = subproject(
+        'dimod',
+        default_options: {
+            'build-extensions': false,  # We only want the dependency
+            'build-tests': 'disabled',  # Likewise we don't need to build the tests
+        },
+    ).get_variable('dimod_dep')
+
+    # Ok, now we can build each of our samplers one-by-one. They all have some idiosyncratic
+    # build needs so we do them individually.
+
+    # -- Greedy
+    py.extension_module(
+        'descent',
+        'dwave/samplers/greedy/descent.pyx',
+        dependencies: [greedy_dep],
+        subdir: 'dwave/samplers/greedy',
+        kwargs: extension_kwargs,
+    )
+
+    # -- Random
+    py.extension_module(
+        'cyrandom',
+        'dwave/samplers/random/cyrandom.pyx',
+        dependencies: [dimod_dep],
+        subdir: 'dwave/samplers/random',
+        kwargs: extension_kwargs,
+    )
+
+    # -- Simulated Annealing
+    py.extension_module(
+        'simulated_annealing',
+        'dwave/samplers/sa/simulated_annealing.pyx',
+        dependencies: [sa_dep],
+        subdir: 'dwave/samplers/sa',
+        kwargs: extension_kwargs,
+    )
+
+    # -- Simulated Quantum Annealing
+    py.extension_module(
+        'pimc_annealing',
+        'dwave/samplers/sqa/pimc_annealing.pyx',
+        dependencies: [sqa_dep],
+        subdir: 'dwave/samplers/sqa',
+        kwargs: extension_kwargs,
+    )
+    py.extension_module(
+        'rotormc_annealing',
+        'dwave/samplers/sqa/rotormc_annealing.pyx',
+        dependencies: [sqa_dep],
+        subdir: 'dwave/samplers/sqa',
+        kwargs: extension_kwargs,
+    )
+
+    # -- Tabu
+    py.extension_module(
+        'tabu_search',
+        'dwave/samplers/tabu/tabu_search.pyx',
+        dependencies: [tabu_dep],
+        subdir: 'dwave/samplers/tabu',
+        kwargs: extension_kwargs,
+    )
+
+    # -- Tree
+    py.extension_module(
+        'sample',
+        'dwave/samplers/tree/sample.pyx',
+        dependencies: [dimod_dep, tree_dep],
+        subdir: 'dwave/samplers/tree',
+        kwargs: extension_kwargs,
+    )
+    py.extension_module(
+        'solve',
+        'dwave/samplers/tree/solve.pyx',
+        dependencies: [dimod_dep, tree_dep],
+        subdir: 'dwave/samplers/tree',
+        kwargs: extension_kwargs,
+    )
+    py.extension_module(
+        'utilities',
+        'dwave/samplers/tree/utilities.pyx',
+        dependencies: [dimod_dep],
+        subdir: 'dwave/samplers/tree',
+        kwargs: extension_kwargs,
+    )
+endif  # get_option('build-extensions')
 
 install_subdir('dwave/samplers', install_dir: py.get_install_dir(pure: false) / 'dwave')
 

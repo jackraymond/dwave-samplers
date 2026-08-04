@@ -109,6 +109,6 @@ venv.bak/
 .mypy_cache/
 
 # meson-managed subprojects
-subprojects/
+subprojects/*
 !subprojects/*.wrap
 !subprojects/README.rst
