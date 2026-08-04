@@ -1,6 +1,6 @@
 [wrap-git]
 url = https://github.com/dwavesystems/dimod
-revision = a1d914da7ffec076aeee7857f4218fc32f2c7eb4
+revision = 43df3c8361132ebde273d2dbbb4bb274c899b3b7
 depth = 1
 
 [provide]

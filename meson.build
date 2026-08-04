@@ -58,9 +58,9 @@ tree_dep = declare_dependency(
 )
 
 # Now the Cython modules that are used in the Python package.
-# The build-extensions option toggles this off to save time for packages that
+# The build-python option toggles this off to save time for packages that
 # use dwave-samplers as a subproject for the C++ dependencies.
-if get_option('build-extensions')
+if get_option('build-python')
     extension_kwargs = {
         'install': true,
         'override_options' : ['cython_language=cpp'],
@@ -81,7 +81,7 @@ if get_option('build-extensions')
     dimod_dep = subproject(
         'dimod',
         default_options: {
-            'build-extensions': false,  # We only want the dependency
+            'build-python': false,  # We only want the dependency
             'build-tests': 'disabled',  # Likewise we don't need to build the tests
         },
     ).get_variable('dimod_dep')
@@ -163,9 +163,12 @@ if get_option('build-extensions')
         subdir: 'dwave/samplers/tree',
         kwargs: extension_kwargs,
     )
-endif  # get_option('build-extensions')
 
-install_subdir('dwave/samplers', install_dir: py.get_install_dir(pure: false) / 'dwave')
+    # If we're not building the extensions, we shouldn't install the package
+    # because imports will fail.
+    install_subdir('dwave/samplers', install_dir: py.get_install_dir(pure: false) / 'dwave')
+
+endif  # get_option('build-python')
 
 # meson doesn't disable tests by default, so we let the user decide via the build-tests
 # option. If set to 'auto', then we build the tests for non-release builds.
