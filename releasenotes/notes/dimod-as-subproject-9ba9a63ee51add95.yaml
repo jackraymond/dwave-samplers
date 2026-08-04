@@ -1,0 +1,6 @@
+---
+features:
+  - Use ``dimod`` as a Meson subproject to access the headers.
+  - |
+    Add ``build-python`` Meson build option so that packages that use
+    ``dwave-samplers`` as a Meson subproject can avoid expensive Cython builds.
