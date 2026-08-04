@@ -295,7 +295,7 @@ class TestSA(unittest.TestCase):
             "Initial states do not match samples with 0 sweeps",
         )
 
-    def test_single_spin_flip_proposals(self):
+    def test_has_ss_proposals(self):
         problem = self._sample_fm_problem(num_variables=8, num_samples=20, num_sweeps=10)
         (
             num_samples,
@@ -331,7 +331,7 @@ class TestSA(unittest.TestCase):
             beta_schedule,
             seed,
             np.copy(initial_states),
-            single_spin_flip_proposals=True,
+            has_ss_proposals=True,
         )
 
         self.assertTrue(np.array_equal(samples_default, samples_true))
@@ -347,7 +347,7 @@ class TestSA(unittest.TestCase):
             beta_schedule,
             seed,
             np.copy(initial_states),
-            single_spin_flip_proposals=False,
+            has_ss_proposals=False,
         )
 
         self.assertTrue(np.array_equal(initial_states, samples_false))

@@ -106,7 +106,7 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
         beta_range
         beta_schedule
         beta_schedule_type
-        global_spin_flip_proposals
+        has_gsi_proposals
         initial_states
         initial_states_generator
         interrupt_function
@@ -116,8 +116,8 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
         proposal_acceptance_criteria
         randomize_order
         seed
-        single_spin_flip_proposals
-        wolff_cluster_proposals
+        has_ss_proposals
+        has_wolff_proposals
         >>> sampler.parameters['beta_range']
         []
         >>> sampler.parameters['beta_schedule_type']
@@ -152,9 +152,9 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                            'initial_states_generator': [],
                            'randomize_order': [],
                            'proposal_acceptance_criteria': [],
-                           'single_spin_flip_proposals': [],
-                           'global_spin_flip_proposals': [],
-                           'wolff_cluster_proposals': [],
+                           'has_ss_proposals': [],
+                           'has_gsi_proposals': [],
+                           'has_wolff_proposals': [],
                            }
         self.properties = {'beta_schedule_options': ('linear', 'geometric',
                                                      'custom')}
@@ -172,9 +172,9 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                initial_states_generator: InitialStateGenerator = "random",
                randomize_order: bool = False,
                proposal_acceptance_criteria: str = 'Metropolis',
-               single_spin_flip_proposals: bool = True,
-               global_spin_flip_proposals: bool = False,
-               wolff_cluster_proposals: bool = False,
+               has_ss_proposals: bool = True,
+               has_gsi_proposals: bool = False,
+               has_wolff_proposals: bool = False,
                **kwargs) -> dimod.SampleSet:
         r"""Sample from a binary quadratic model.
 
@@ -277,24 +277,24 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                 When "Metropolis", each proposal is accepted according
                 to the Metropolis-Hastings criteria.
 
-            single_spin_flip_proposals:
-                When `True` (default), local single-spin updates are performed
+            has_ss_proposals:
+                When `True` (default), single-spin updates are proposed
                 in each sweep using the selected proposal acceptance criteria.
-                When `False`, spin flip proposals are not made.
+                When `False`, single-spin flip proposals are not made.
 
-            global_spin_flip_proposals:
-                When `True`, a global spin-inversion is
+            has_gsi_proposals:
+                When `True`, a global-spin-inversion update is
                 proposed per sweep. When `False` (default), no global inversion
                 proposals are applied. This move is non-ergodic with more than
                 1 spin and should typically be combined with
-                ``single_spin_flip_proposals``. This may accelerate mixing between
+                ``has_ss_proposals``. This may accelerate mixing between
                 nearly symmetric states at large Hamming distance (small
                 fields) relative to single spin flip proposals alone. When
                 enabled, the update follows single-spin proposals. Global spin
                 flip proposals are significantly less
-                costly per sweep than single-spin update proposals.
+                costly per sweep than the net cost of single-spin proposals.
 
-            wolff_cluster_proposals:
+            has_wolff_proposals:
                 When `True`, a Wolff cluster move is proposed per sweep. A
                 cluster grown from a random seed variable via satisfied bonds is
                 flipped subject to the Metropolis or Gibbs acceptance criteria.
@@ -302,8 +302,8 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
                 enabled, the update follows single-spin proposals and global
                 inversion proposals, which can be disabled (for a standard
                 Wolff algorithm) by setting
-                ``single_spin_flip_proposals`` and
-                ``global_spin_flip_proposals`` to `False`.
+                ``has_ss_proposals`` and
+                ``has_gsi_proposals`` to `False`.
                 When appropriate, cluster proposals are typically significantly
                 more costly per sweep than single-spin update proposals. They
                 are known to scalably accelerate mixing in nearly unfrustrated
@@ -477,9 +477,9 @@ class SimulatedAnnealingSampler(dimod.Sampler, dimod.Initialized):
             num_sweeps_per_beta, beta_schedule,
             seed, initial_states_array,
             randomize_order, proposal_acceptance_criteria,
-            single_spin_flip_proposals,
-            global_spin_flip_proposals,
-            wolff_cluster_proposals,
+            has_ss_proposals,
+            has_gsi_proposals,
+            has_wolff_proposals,
             interrupt_function)
         timestamp_postprocess = perf_counter_ns()
 

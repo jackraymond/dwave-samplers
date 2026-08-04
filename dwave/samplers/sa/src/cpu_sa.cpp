@@ -104,11 +104,11 @@ double get_all_flip_energy(
 //        `beta_schedule`.
 // @param beta_schedule A list of the beta values to run `sweeps_per_beta`
 //        sweeps at.
-// @param single_spin_flip_proposals A boolean that indicates whether single spin-flip
+// @param has_ss_proposals A boolean that indicates whether single spin-flip
 //        updates should be performed.
-// @param global_spin_flip_proposals A boolean that indicates whether global spin flip
+// @param has_gsi_proposals A boolean that indicates whether global spin flip
 //        updates should be performed.
-// @param wolff_cluster_proposals A boolean that indicates whether Wolff cluster
+// @param has_wolff_proposals A boolean that indicates whether Wolff cluster
 //        updates should be performed.
 // @return Nothing, but `state` now contains the result of the run.
 template <VariableOrder varorder, Proposal proposal_acceptance_criteria>
@@ -120,9 +120,9 @@ void simulated_annealing_run(
     const vector<vector<double>>& neighbour_couplings,
     const int sweeps_per_beta,
     const vector<double>& beta_schedule,
-    const bool single_spin_flip_proposals,
-    const bool global_spin_flip_proposals,
-    const bool wolff_cluster_proposals
+    const bool has_ss_proposals,
+    const bool has_gsi_proposals,
+    const bool has_wolff_proposals
 ) {
     const int num_vars = h.size();
 
@@ -142,12 +142,12 @@ void simulated_annealing_run(
     cluster_stack.reserve(num_vars);
 
     // build the delta_energy array by getting the delta energy for each
-    // variable, this could be conditional on single_spin_flip_proposals, but the benefit is negligible
+    // variable, this could be conditional on has_ss_proposals, but the benefit is negligible
     for (int var = 0; var < num_vars; var++) {
         delta_energy[var] = get_flip_energy(var, state, h, degrees,
                                             neighbors, neighbour_couplings);
     }
-    // Calculate energy change from a global_spin_flip_proposals, could
+    // Calculate energy change from a has_gsi_proposals, could
     // be conditional, but the benefit is negligible
 
     double all_flip_energy = get_all_flip_energy(state, h);
@@ -165,7 +165,7 @@ void simulated_annealing_run(
             // 1 / 2^64. since log(1 / 2^64) = -44.361, if the delta energy is
             // greater than 44.361 / beta, then we can safely skip computing
             // the probability.
-            if (single_spin_flip_proposals) {
+            if (has_ss_proposals) {
                 const double threshold = 44.36142 / beta;
                 for (int varI = 0; varI < num_vars; varI++) {
                     int var;
@@ -233,7 +233,7 @@ void simulated_annealing_run(
                     }
                 }
             }
-            if (global_spin_flip_proposals) {
+            if (has_gsi_proposals) {
                 /*
                     Poor man's Wolff algorithm, but sufficient to
                     accelerate mixing for nearly symmetric states at large
@@ -251,7 +251,7 @@ void simulated_annealing_run(
                     }
                 }
             }
-            if (wolff_cluster_proposals) {
+            if (has_wolff_proposals) {
                 /*
                     Wolff cluster update. A cluster of spins is grown outward
                     from a uniformly selected seed variable: a satisfied bond,
@@ -326,7 +326,7 @@ void simulated_annealing_run(
                 }
                 
                 // TO DO: We should allow an option for Wolff to run without
-                // global_spin_flip_proposals, and single bit flips, in which case this
+                // has_gsi_proposals, and single bit flips, in which case this
                 // expensive stage can be skipped. Other efficiencies may
                 // also be possible.
                 if (flip_cluster) {
@@ -337,7 +337,7 @@ void simulated_annealing_run(
                     // recompute the single-flip delta energies for the cluster
                     // members and their neighbors, and refresh the global
                     // inversion energy, since many spins changed at once
-                    if (single_spin_flip_proposals) {
+                    if (has_ss_proposals) {
                         for (int ci = 0; ci < (int)cluster_members.size(); ci++) {
                             int var = cluster_members[ci];
                             delta_energy[var] = get_flip_energy(var, state, h, degrees,
@@ -349,7 +349,7 @@ void simulated_annealing_run(
                             }
                         }
                     }
-                    if (global_spin_flip_proposals) {
+                    if (has_gsi_proposals) {
                         all_flip_energy = get_all_flip_energy(state, h);
                     }
                 }
@@ -415,12 +415,12 @@ double get_state_energy(
 //        `beta_schedule`.
 // @param beta_schedule A list of the beta values to run `sweeps_per_beta`
 //        sweeps at.
-// @param single_spin_flip_proposals When true, single spin-flip updates are proposed
+// @param has_ss_proposals When true, single spin-flip updates are proposed
 //        throughout each sweep.
-// @param global_spin_flip_proposals When true, a global spin-inversion (Wolff-like) move is
+// @param has_gsi_proposals When true, a global spin-inversion (Wolff-like) move is
 //        proposed at the end of every sweep to accelerate mixing between
 //        nearly symmetric states.
-// @param wolff_cluster_proposals When true, a Wolff cluster move is proposed at the
+// @param has_wolff_proposals When true, a Wolff cluster move is proposed at the
 //        end of every sweep: a cluster grown from a random seed via satisfied
 //        bonds is flipped subject to the Metropolis or Gibbs acceptance rule.
 // @param interrupt_callback A function that is invoked between each run of simulated annealing
@@ -440,9 +440,9 @@ int general_simulated_annealing(
     const uint64_t seed,
     const VariableOrder varorder,
     const Proposal proposal_acceptance_criteria,
-    const bool single_spin_flip_proposals,
-    const bool global_spin_flip_proposals,
-    const bool wolff_cluster_proposals,
+    const bool has_ss_proposals,
+    const bool has_gsi_proposals,
+    const bool has_wolff_proposals,
     callback interrupt_callback,
     void * const interrupt_function
 ) {
@@ -511,28 +511,28 @@ int general_simulated_annealing(
                 simulated_annealing_run<Random, Metropolis>(state, h, degrees,
                                                     neighbors, neighbour_couplings,
                                                     sweeps_per_beta, beta_schedule,
-                                                    single_spin_flip_proposals,
-                                                    global_spin_flip_proposals, wolff_cluster_proposals);
+                                                    has_ss_proposals,
+                                                    has_gsi_proposals, has_wolff_proposals);
             } else {
                 simulated_annealing_run<Random, Gibbs>(state, h, degrees,
                                                      neighbors, neighbour_couplings,
                                                      sweeps_per_beta, beta_schedule,
-                                                     single_spin_flip_proposals,
-                                                     global_spin_flip_proposals, wolff_cluster_proposals);
+                                                     has_ss_proposals,
+                                                     has_gsi_proposals, has_wolff_proposals);
           }
         } else {
             if (proposal_acceptance_criteria == Metropolis) {
                 simulated_annealing_run<Sequential, Metropolis>(state, h, degrees,
                                                      neighbors, neighbour_couplings,
                                                      sweeps_per_beta, beta_schedule,
-                                                     single_spin_flip_proposals,
-                                                     global_spin_flip_proposals, wolff_cluster_proposals);
+                                                     has_ss_proposals,
+                                                     has_gsi_proposals, has_wolff_proposals);
             } else {
                 simulated_annealing_run<Sequential, Gibbs>(state, h, degrees,
                                                       neighbors, neighbour_couplings,
                                                       sweeps_per_beta, beta_schedule,
-                                                      single_spin_flip_proposals,
-                                                      global_spin_flip_proposals, wolff_cluster_proposals);
+                                                      has_ss_proposals,
+                                                      has_gsi_proposals, has_wolff_proposals);
             }
         }
         // compute the energy of the sample and store it in `energies`

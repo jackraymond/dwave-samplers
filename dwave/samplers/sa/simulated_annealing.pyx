@@ -38,9 +38,9 @@ cdef extern from "cpu_sa.h" namespace "dwave::samplers::sa":
             const unsigned long long seed,
             const VariableOrder varorder,
             const Proposal proposal_acceptance_criteria,
-            const bint single_spin_flip_proposals,
-            const bint global_spin_flip_proposals,
-            const bint wolff_cluster_proposals,
+            const bint has_ss_proposals,
+            const bint has_gsi_proposals,
+            const bint has_wolff_proposals,
             callback interrupt_callback,
             void *interrupt_function) nogil
 
@@ -50,9 +50,9 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
                         np.ndarray[np.int8_t, ndim=2, mode="c"] states_numpy,
                         randomize_order=False,
                         proposal_acceptance_criteria='Metropolis',
-                        single_spin_flip_proposals=True,
-                        global_spin_flip_proposals=False,
-                        wolff_cluster_proposals=False,
+                        has_ss_proposals=True,
+                        has_gsi_proposals=False,
+                        has_wolff_proposals=False,
                         interrupt_function=None):
     """Wraps `general_simulated_annealing` from `cpu_sa.cpp`. Accepts
     an Ising problem defined on a general graph and returns samples
@@ -124,18 +124,18 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
         When `Metropolis`, each spin flip proposal is accepted according to the
         Metropolis-Hastings criteria.
 
-    single_spin_flip_proposals: bool
+    has_ss_proposals: bool
         When True (default), local single-spin updates are performed in each
         sweep using the selected proposal acceptance criteria. When False,
         local updates are disabled.
 
-    global_spin_flip_proposals: bool
+    has_gsi_proposals: bool
         When True, a global spin-inversion (Wolff-like) move is proposed at the
         end of each sweep. This accelerates mixing between nearly symmetric
         states at large Hamming distance (small ``h``). When False (default), no
         global inversion move is applied.
 
-    wolff_cluster_proposals: bool
+    has_wolff_proposals: bool
         When True, a Wolff cluster move is proposed at the end of each sweep. A
         cluster grown from a random seed variable via satisfied bonds is flipped
         subject to the Metropolis or Gibbs acceptance criteria. When False
@@ -185,9 +185,9 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
         _proposal_acceptance_criteria = Metropolis
     else:
         raise ValueError(f'Unknown proposal_acceptance_criteria: {proposal_acceptance_criteria}')
-    cdef bint _single_spin_flip_proposals = single_spin_flip_proposals
-    cdef bint _global_spin_flip_proposals = global_spin_flip_proposals
-    cdef bint _wolff_cluster_proposals = wolff_cluster_proposals
+    cdef bint _has_ss_proposals = has_ss_proposals
+    cdef bint _has_gsi_proposals = has_gsi_proposals
+    cdef bint _has_wolff_proposals = has_wolff_proposals
     cdef void* _interrupt_function
     if interrupt_function is None:
         _interrupt_function = NULL
@@ -208,9 +208,9 @@ def simulated_annealing(num_samples, h, coupler_starts, coupler_ends,
                                           _seed,
                                           _varorder,
                                           _proposal_acceptance_criteria,
-                                          _single_spin_flip_proposals,
-                                          _global_spin_flip_proposals,
-                                          _wolff_cluster_proposals,
+                                          _has_ss_proposals,
+                                          _has_gsi_proposals,
+                                          _has_wolff_proposals,
                                           interrupt_callback,
                                           _interrupt_function)
 
