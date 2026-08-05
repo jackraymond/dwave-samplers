@@ -174,7 +174,7 @@ py.extension_module(
 py.extension_module(
     'utilities',
     'dwave/samplers/tree/utilities.pyx',
-    dependencies: [dimod_dep],
+    dependencies: [dimod_dep, tree_dep],
     install: true,
     override_options : ['cython_language=cpp'],
     cython_args : ['-Xfreethreading_compatible=True'],

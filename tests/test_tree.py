@@ -21,7 +21,7 @@ import numpy as np
 
 from dwave.samplers.tree.solve import solve_bqm_wrapper
 from dwave.samplers.tree.sample import sample_bqm_wrapper
-from dwave.samplers.tree.utilities import elimination_order_width, min_fill_heuristic
+from dwave.samplers.tree.utilities import elimination_order_width, greedy_var_order, min_fill_heuristic
 
 
 class TestWrappers(unittest.TestCase):
@@ -178,3 +178,53 @@ class TestTreewidth(unittest.TestCase):
             self.assertEqual(tw, 1)
 
             self.check_order(bqm, tw, order)
+
+
+class TestGreedyVarOrderWrapper(unittest.TestCase):
+    def test_bqm_min_fill(self):
+        bqm = dimod.BQM('BINARY')
+        bqm.add_quadratic(0, 1, 1)
+        bqm.add_quadratic(1, 2, 1)
+
+        tw, order = greedy_var_order(bqm, heuristic='MIN_FILL', seed=123)
+
+        self.assertEqual(tw, elimination_order_width(bqm, order))
+        self.assertEqual(set(order), set(bqm.variables))
+        self.assertEqual(len(order), len(bqm))
+
+    def test_bqm_exact(self):
+        bqm = dimod.BQM('BINARY')
+        bqm.add_quadratic('a', 'b', 1)
+        bqm.add_quadratic('b', 'c', 1)
+        bqm.add_quadratic('c', 'd', 1)
+
+        tw, order = greedy_var_order(bqm, heuristic='EXACT', seed=7)
+
+        self.assertEqual(tw, elimination_order_width(bqm, order))
+        self.assertEqual(set(order), {'a', 'b', 'c', 'd'})
+        self.assertEqual(len(order), 4)
+
+    def test_heuristic_as_enum_value(self):
+        bqm = dimod.from_networkx_graph(nx.cycle_graph(4), vartype='BINARY')
+
+        tw, order = greedy_var_order(bqm, heuristic=0, seed=11)
+
+        self.assertEqual(tw, elimination_order_width(bqm, order))
+        self.assertEqual(set(order), set(bqm.variables))
+
+    def test_exact_seed_is_deterministic(self):
+        bqm = dimod.from_networkx_graph(nx.path_graph(6), vartype='BINARY')
+
+        tw_a, order_a = greedy_var_order(bqm, heuristic='EXACT', seed=17)
+        tw_b, order_b = greedy_var_order(bqm, heuristic='EXACT', seed=17)
+
+        self.assertEqual(tw_a, tw_b)
+        self.assertEqual(order_a, order_b)
+
+    def test_exact_seed_changes_ordering(self):
+        bqm = dimod.from_networkx_graph(nx.path_graph(6), vartype='BINARY')
+
+        _, order_a = greedy_var_order(bqm, heuristic='EXACT', seed=17)
+        _, order_b = greedy_var_order(bqm, heuristic='EXACT', seed=23)
+
+        self.assertNotEqual(order_a, order_b)

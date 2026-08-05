@@ -1,0 +1,11 @@
+---
+prelude: >
+    Some heuristics for elimination order are buried, the are now exposed.
+    In special cases it can be useful to use an exact branch and bound method
+    for search and verification, this has been added.
+features:
+  - |
+    Exposure of methods beyond MIN_FILL for elimination order estimation.
+    Implementation of an efficient branch and cut method based upon
+    arXiv:0803.1321 . The code was generated primarily with Claude Sonnet 5
+    and has not been scrutinized line by line.
