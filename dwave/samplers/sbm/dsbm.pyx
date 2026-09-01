@@ -1,6 +1,3 @@
-# distutils: language = c++
-# distutils: include_dirs = dwave/samplers/sbm/src/
-# distutils: sources = dwave/samplers/sbm/src/cpu_dsbm.cpp
 # cython: language_level = 3
 
 # Copyright 2025 D-Wave
@@ -21,7 +18,6 @@ from libcpp cimport bool
 from libcpp.vector cimport vector
 
 import numpy as np
-cimport numpy as np
 
 
 cdef extern from "cpu_dsbm.h":
@@ -46,8 +42,8 @@ cdef extern from "cpu_dsbm.h":
 def dsbm(num_samples, num_vars, coupler_starts, coupler_ends,
     coupler_weights, a0, c0, Delta_t,
     a_schedule,
-    np.ndarray[np.float64_t, ndim=2, mode="c"] initial_x,
-    np.ndarray[np.float64_t, ndim=2, mode="c"] initial_y,
+    double[:, ::1] initial_x,
+    double[:, ::1] initial_y,
     interrupt_function=None):
     """Wraps `general_discrete_simulated_bifurcation_machine` from `cpu_dsbm.cpp`. Accepts
     an Ising problem defined on a general graph and returns samples
@@ -99,8 +95,8 @@ def dsbm(num_samples, num_vars, coupler_starts, coupler_ends,
     if num_samples*num_vars == 0:
         return num_samples
     
-    cdef np.float64_t* _states_x = &initial_x[0, 0]
-    cdef np.float64_t* _states_y = &initial_y[0, 0]
+    cdef double* _states_x = &initial_x[0, 0]
+    cdef double* _states_y = &initial_y[0, 0]
     cdef int _num_samples = num_samples
     cdef int _num_vars = num_vars
     cdef vector[int] _coupler_starts = coupler_starts
