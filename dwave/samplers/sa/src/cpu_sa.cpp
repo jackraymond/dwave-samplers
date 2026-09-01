@@ -20,6 +20,8 @@
 #include <stdexcept>
 #include "cpu_sa.h"
 
+namespace dwave::samplers::sa {
+
 
 // xorshift128+ as defined https://en.wikipedia.org/wiki/Xorshift#xorshift.2B
 #define FASTRAND(rand) do {                       \
@@ -31,7 +33,7 @@
     rand = rng_state[1] + y;                      \
 } while (0)
 
-#define RANDMAX ((uint64_t)-1L)
+#define RANDMAX (static_cast<double>((uint64_t)-1L))
 
 using namespace std;
 
@@ -358,3 +360,5 @@ int general_simulated_annealing(
     // return the number of samples we actually took
     return sample;
 }
+
+}  // namespace dwave::samplers::sa

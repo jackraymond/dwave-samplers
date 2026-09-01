@@ -20,9 +20,9 @@
 using std::size_t;
 using std::vector;
 
-using orang::DomIndexVector;
-using orang::VarVector;
-using orang::Table;
+using dwave::samplers::tree::DomIndexVector;
+using dwave::samplers::tree::VarVector;
+using dwave::samplers::tree::Table;
 
 class MallocPtr {
 private:
@@ -82,7 +82,7 @@ vector<Table<double>::smartptr> getTables(
     VarVector vars2(2);
     vector<Table<double>::smartptr> tables;
 
-    auto num_vars = bqm.num_variables();
+    int num_vars = bqm.num_variables();
 
     for (int i = 0; i < num_vars; ++i) {
         auto var = i;
@@ -97,10 +97,11 @@ vector<Table<double>::smartptr> getTables(
 
     for (int i = 0; i < num_vars; ++i) {
         auto var = i;
-        auto span = bqm.neighborhood(var);
-        while (span.first != span.second) {
-            auto neighbor = span.first->v;
-            auto bias = span.first->bias;
+        auto neighborhood_it = bqm.cbegin_neighborhood(var);
+        const auto neighborhood_end = bqm.cend_neighborhood(var);
+        while (neighborhood_it != neighborhood_end) {
+            auto neighbor = neighborhood_it->v;
+            auto bias = neighborhood_it->bias;
 
             if (neighbor > var && bias != 0.0) {
               vars2[0] = var;
@@ -114,7 +115,7 @@ vector<Table<double>::smartptr> getTables(
 
               tables.push_back(t);
             }
-            ++span.first;
+            ++neighborhood_it;
         }
     }
     return tables;

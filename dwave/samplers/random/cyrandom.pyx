@@ -1,6 +1,3 @@
-# distutils: language = c++
-# cython: language_level = 3
-
 # Copyright 2022 D-Wave Systems Inc.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,16 +14,14 @@
 
 cimport cython
 
-from cpython.pycapsule cimport PyCapsule_IsValid, PyCapsule_GetPointer
+from libc.stdint cimport int8_t, uint8_t
 from libcpp.algorithm cimport make_heap, push_heap, pop_heap
-from libcpp.utility cimport pair
+from libcpp.utility cimport move, pair
 from libcpp.vector cimport vector
 
 import dimod
 cimport dimod
 import numpy as np
-cimport numpy as np
-cimport numpy.random
 
 # chrono is not included in Cython's libcpp. So we do it more manually
 cdef extern from *:
@@ -43,47 +38,25 @@ cdef extern from *:
 
 # it would be nicer to use a struct, but OSX throws segfaults when sorting
 # Cython-created structs. We should retest that when we switch to Cython 3.
-ctypedef pair[np.float64_t, vector[np.int8_t]] state_t
-
-
-cdef state_t get_sample(dimod.cyBQM_float64 cybqm,
-                        numpy.random.bitgen_t* bitgen,
-                        bint is_spin = False,
-                        ):
-    # developer note: there is a bunch of potential optimization here
-    cdef state_t state
-
-    # generate the sample
-    state.second.reserve(cybqm.num_variables())
-    cdef Py_ssize_t i
-    for i in range(cybqm.num_variables()):
-        state.second.push_back(bitgen.next_uint32(bitgen.state) % 2)
-
-    if is_spin:
-        # go back through and convert to spin
-        for i in range(state.second.size()):
-            state.second[i] = 2 * state.second[i] - 1
-
-    state.first = cybqm.data().energy(state.second.begin())
-
-    return state
+ctypedef pair[double, vector[int8_t]] state_t
 
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def sample(object bqm,
-           Py_ssize_t num_reads,
-           np.float64_t time_limit,
-           Py_ssize_t max_num_samples,
-           object seed):
+def sample(
+    dimod.cyBQM_float64 cybqm,
+    Py_ssize_t num_reads,
+    double time_limit,
+    Py_ssize_t max_num_samples,
+    Py_ssize_t batch_size,
+    object seed,
+):
+    if cybqm.vartype() is not dimod.BINARY:
+        raise ValueError("cybqm must be binary")
+    cdef Py_ssize_t num_variables = cybqm.num_variables()
 
-    cdef Py_ssize_t i, j  # counters for use later
-
-    # Get Cython access to the BQM. We could template to avoid the copy,
-    # but honestly everyone just uses float64 anyway so...
-    cdef dimod.cyBQM_float64 cybqm = dimod.as_bqm(bqm, dtype=float).data
-    cdef bint is_spin = bqm.vartype is dimod.SPIN
-
+    if batch_size <= 0:
+        raise ValueError("batch_size must be a positive integer")
     if num_reads <= 0:
         raise ValueError("num_reads must be positive")
     if time_limit <= 0:
@@ -91,73 +64,68 @@ def sample(object bqm,
     if max_num_samples <= 0:
         raise ValueError("max_num_samples must be positive")
 
-    # Get Cython access to the rng
+    # Get our rng
     rng = np.random.default_rng(seed)
-    cdef numpy.random.bitgen_t *bitgen
-    cdef const char *capsule_name = "BitGenerator"
-    capsule = rng.bit_generator.capsule
-    if not PyCapsule_IsValid(capsule, capsule_name):
-        raise ValueError("Invalid pointer to anon_func_state")
-    bitgen = <numpy.random.bitgen_t *> PyCapsule_GetPointer(capsule, capsule_name)
 
-    # ok, time to start sampling!
+    # Ok, time to start sampling so let's start the timer
     cdef double sampling_start_time = realtime_clock()
     cdef double sampling_stop_time = sampling_start_time + time_limit
 
-    # fill out the population
-    cdef vector[state_t] samples
-    for i in range(max_num_samples):
-        samples.push_back(get_sample(cybqm, bitgen, is_spin))
+    # Get a vector that will hold our samples. We'll be keeping them in a heap
+    # so that we can keep the best as we go
+    cdef vector[state_t] samples_heap
 
-        if samples.size() >= num_reads:
-            break
-        if realtime_clock() >= sampling_stop_time:
-            break
+    # Track the total number of samples we drew
+    cdef Py_ssize_t num_drawn = 0
 
-    cdef Py_ssize_t num_drawn = samples.size()
+    # Some cdefs we'll need inside the loop
+    cdef const uint8_t[:, ::1] batch
+    cdef vector[int8_t] sample
 
-    # determine if we need to keep going
-    if samples.size() < num_reads and realtime_clock() < sampling_stop_time:
-        # at this point, we want to stop growing our samples vector, so
-        # we turn it into a heap
-        make_heap(samples.begin(), samples.end())
+    # Until we run out of samples or time, draw random samples
+    cdef bint stop = False
+    while not stop:
+        # Use NumPy to generate a batch of random samples. We do this in batches
+        # to amortize the cost of calling a Python function. We could avoid the
+        # Python overhead with a cimport but this way we avoid a compile-time
+        # relationship with NumPy.
+        batch = rng.integers(2, size=(batch_size, num_variables), dtype=np.uint8)
 
-        # we're never going to change size, so we stop testing the num_reads
-        # condition. It was up to the caller to ensure that max_num_samples >= num_reads
-        # if they want to terminate on num_reads
-        while realtime_clock() < sampling_stop_time:
-            samples.push_back(get_sample(cybqm, bitgen, is_spin))
-            push_heap(samples.begin(), samples.end())
-            pop_heap(samples.begin(), samples.end())
-            samples.pop_back()
+        for bi in range(batch_size):
+            # If we've run out of time, don't parse the next sample
+            if realtime_clock() >= sampling_stop_time:
+                stop = True
+                break
 
+            # Copy the sample from an array into a vector
+            sample.reserve(num_variables)
+            for vi in range(num_variables):
+                sample.emplace_back(batch[bi, vi])
+
+            # Put that vector (with its energy) on the heap
+            samples_heap.emplace_back(cybqm.data().energy(sample.begin()), move(sample))
+            push_heap(samples_heap.begin(), samples_heap.end())
+
+            # Increment the total number we've drawn
             num_drawn += 1
+
+            # If we've drawn enough, exit early
+            if num_drawn >= num_reads:
+                stop = True
+                break
+
+            # Finally make sure out heap isn't getting larger than the max_num_samples
+            if samples_heap.size() > <size_t>max_num_samples:
+                pop_heap(samples_heap.begin(), samples_heap.end())
+                samples_heap.pop_back()
 
     # sampling done!
     # time to construct the return objects
+    cdef int8_t[:, ::1] samples = np.empty((samples_heap.size(), num_variables), dtype=np.int8)
+    cdef double[::1] energies = np.empty(samples_heap.size(), dtype=np.double)
+    for i in range(samples_heap.size()):
+        for vi in range(num_variables):
+            samples[i, vi] = samples_heap[i].second[vi]
+        energies[i] = samples_heap[i].first
 
-    record = np.rec.array(
-        np.empty(samples.size(),
-                 dtype=[('sample', np.int8, (bqm.num_variables,)),
-                        ('energy', float),
-                        ('num_occurrences', int)]))
-
-    record['num_occurrences'][:] = 1
-
-    cdef np.float64_t[:] energies_view = record['energy']
-    for i in range(samples.size()):
-        energies_view[i] = samples[i].first
-
-    cdef np.int8_t[:, :] sample_view = record['sample']
-    for i in range(samples.size()):
-        for j in range(cybqm.num_variables()):
-            sample_view[i, j] = samples[i].second[j]
-
-    sampleset = dimod.SampleSet(record, bqm.variables, info=dict(), vartype=bqm.vartype)
-
-    sampleset.info.update(
-        num_reads=num_drawn,
-        # todo: timing data
-        )
-
-    return sampleset
+    return np.asarray(samples), np.asarray(energies), dict(num_reads=num_drawn)

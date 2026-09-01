@@ -4,9 +4,6 @@
 .. image:: https://img.shields.io/pypi/pyversions/dwave-samplers.svg
     :target: https://pypi.python.org/pypi/dwave-samplers
 
-.. image:: https://codecov.io/gh/dwavesystems/dwave-samplers/branch/main/graph/badge.svg
-    :target: https://codecov.io/gh/dwavesystems/dwave-samplers
-
 .. image:: https://circleci.com/gh/dwavesystems/dwave-samplers.svg?style=svg
     :target: https://circleci.com/gh/dwavesystems/dwave-samplers
 
@@ -87,7 +84,7 @@ Get the best 5 sample found in .1 seconds.
 Simulated Annealing
 -------------------
 
-`Simulated annealing <https://en.wikipedia.org/wiki/Simulated_annealing>`_ can
+`Simulated annealing <https://en.wikipedia.org/wiki/Simulated_annealing>`__ can
 be used for heuristic optimization or approximate Boltzmann sampling. The
 *dwave-samplers* implementation approaches the equilibrium distribution by
 performing updates at a sequence of decreasing temperatures, terminating at the
@@ -150,7 +147,7 @@ Sample projected states from a quantum process with a linear schedule
 Steepest Descent
 ----------------
 
-`Steepest descent <https://en.wikipedia.org/wiki/Gradient_descent>`_ is the
+`Steepest descent <https://en.wikipedia.org/wiki/Gradient_descent>`__ is the
 discrete analogue of gradient descent, but the best move is computed using a
 local minimization rather rather than computing a gradient. The dimension along
 which to descend is determined, at each step, by the variable flip that causes
@@ -219,7 +216,7 @@ Sample using both default and custom values of tenure and number of restarts.
 Tree Decomposition
 ------------------
 
-`Tree decomposition <https://en.wikipedia.org/wiki/Tree_decomposition>`_-based
+`Tree decomposition <https://en.wikipedia.org/wiki/Tree_decomposition>`__-based
 solvers have a runtime that is exponential in the
 `treewidth <https://en.wikipedia.org/wiki/Treewidth>`_ of the problem graph. For
 problems with low treewidth, the solver can find ground states very quickly.
@@ -252,36 +249,36 @@ exactly.
 Installation
 ============
 
-To install the core package:
+To install the package from PyPI:
 
 .. code-block:: bash
 
     pip install dwave-samplers
 
-License
-=======
-
-Released under the Apache License 2.0
-
-Contributing
-============
-
-Ocean's `contributing guide <https://docs.dwavequantum.com/en/latest/ocean/contribute.html>`_
-has guidelines for contributing to Ocean packages.
-
-Release Notes
--------------
-
-**dwave-samplers** makes use of `reno <https://docs.openstack.org/reno/>`_ to
-manage its release notes.
-
-When making a contribution to **dwave-samplers** that will affect users, create
-a new release note file by running
+During package development, it is often convenient to use an editable install (from source).
+See `meson-python's editable installs
+<https://meson-python.readthedocs.io/en/latest/how-to-guides/editable-installs.html>`_
+for more details.
 
 .. code-block:: bash
 
-    reno new your-short-descriptor-here
+    pip install --group dev
+    pip install --editable . \
+        --no-build-isolation \
+        --config-settings=editable-verbose=true
 
-You can then edit the file created under ``releasenotes/notes/``.
-Remove any sections not relevant to your changes.
-Commit the file along with your changes.
+To run the C++ tests, first install the project dependencies, then setup a
+``meson`` build directory. You must configure the build as a debug build for
+the tests to run.
+
+.. code-block:: bash
+
+    pip install --group dev
+    meson setup build -Dbuildtype=debug
+
+You can then run the tests using
+`meson's test framework <https://mesonbuild.com/Unit-tests.html>`_.
+
+.. code-block:: bash
+
+    meson test -Cbuild

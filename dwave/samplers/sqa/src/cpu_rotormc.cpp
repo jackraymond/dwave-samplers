@@ -21,6 +21,8 @@ Copyright 2024 D-Wave
 #include <limits>
 #include "cpu_rotormc.h"
 
+namespace dwave::samplers::sqa {
+
 #ifndef M_PI
 #define M_PI (3.14159265358979323846)
 #endif
@@ -330,7 +332,7 @@ double get_state_energyQ(std::uint8_t* state,
                          const vector<double>& trans_fields,
                          const vector<double>& state_to_sintheta) {
   double en = 0;
-  for(int var = 0; var < trans_fields.size(); var++) {
+  for(int var = 0, size = trans_fields.size(); var < size; var++) {
     en += trans_fields[var]*state_to_sintheta[state[var]];
   }
   return(en);
@@ -558,3 +560,5 @@ int general_simulated_annealing(
     // return the number of samples we actually took
     return sample;
 }
+
+}  // namespace dwave::samplers::sqa

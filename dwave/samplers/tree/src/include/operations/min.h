@@ -31,7 +31,7 @@
 #include <table.h>
 #include <marginalizer.h>
 
-namespace orang {
+namespace dwave::samplers::tree {
 
 template<typename Y, typename Compare=std::less<Y> >
 class MinMarginalizer : public Marginalizer<Y> {
@@ -131,7 +131,6 @@ private:
   }
 
   virtual void solveImpl(solution_type& solSet) const {
-    typedef typename solution_type::solution_type single_solution_type;
     typedef typename solution_type::solution_set solution_set;
 
     solution_set inSolSet;
@@ -252,6 +251,6 @@ public:
   std::size_t maxSolutions() const { return maxSolutions_; }
 };
 
-} // namespace orang
+} // namespace dwave::samplers::tree
 
 #endif

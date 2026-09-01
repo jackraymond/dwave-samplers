@@ -37,6 +37,7 @@ Copyright 2024 D-Wave
 #include <stdexcept>
 #include "localPIMC.h"
 
+namespace dwave::samplers::sqa {
 
 using namespace std;
 
@@ -131,7 +132,7 @@ void localPIMC::run(const std::vector<double> & HdField,
 		    const int evaluateEvery) {
     if (qubitsPerUpdate == 1) {
         std::uniform_int_distribution<> randomQubitIndex(0, numVar - 1);
-        for(int schedI = 0; schedI < HdField.size(); schedI++){
+        for(int schedI = 0, size = HdField.size(); schedI < size; schedI++){
             invTempGamma = HdField[schedI];
             invTemp = HpField[schedI];
             for (int sweepI = 0; sweepI < nSweepsPerField * numVar; sweepI++)
@@ -144,7 +145,7 @@ void localPIMC::run(const std::vector<double> & HdField,
     } else {
         int numChains = numVar / qubitsPerChain;
         std::uniform_int_distribution<> randomChainIndex(0, numChains - 1);
-        for(int schedI = 0; schedI < HdField.size(); schedI++){
+        for(int schedI = 0, size = HdField.size(); schedI < size; schedI++){
             invTempGamma = HdField[schedI];
             invTemp = HpField[schedI];
             for (int sweepI = 0; sweepI < nSweepsPerField * numVar; sweepI++) {
@@ -263,7 +264,7 @@ void localPIMC::initializeWorldLines(int initialCondition, int Lperiodic, int qu
     breaks.resize(numVar);
     for (int n = 0; n < nChains; n++) {
         breaks[n].resize(0);
-        assert(tripartiteClassification.size() == nChains);
+        assert(0 <= nChains && tripartiteClassification.size() == static_cast<size_t>(nChains));
         assert(blockState * 3 + tripartiteClassification[n] < 18);
         int thisSpin = alignedMask[blockState * 3 + tripartiteClassification[n]];
         for (int k = 0; k < qubitsPerChain; k++) {
@@ -712,3 +713,5 @@ int general_simulated_annealing(
     // return the number of samples we actually took
     return sample_index;
 }
+
+}  // namespace dwave::samplers::sqa

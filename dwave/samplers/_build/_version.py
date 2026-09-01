@@ -1,5 +1,6 @@
-/**
-# Copyright 2019 D-Wave Systems Inc.
+#!/usr/bin/env python3
+
+# Copyright 2026 D-Wave
 #
 #    Licensed under the Apache License, Version 2.0 (the "License");
 #    you may not use this file except in compliance with the License.
@@ -12,8 +13,15 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
-#
-# =============================================================================
-*/
-#define BOOST_TEST_MODULE orang
-#include <boost/test/unit_test.hpp>
+
+if __name__ == "__main__":
+    import os.path
+    import re
+
+    pck_root = os.path.dirname(os.path.dirname(__file__))
+    with open(os.path.join(pck_root, '__init__.py')) as f:
+        m = re.search(
+            r"__version__ = \"([0-9]+(\.[0-9]+)*((\.dev|rc)([0-9]+)?)?)\"",
+            f.read()
+            )
+    print(m.group(1))

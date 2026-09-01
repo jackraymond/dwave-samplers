@@ -19,6 +19,8 @@
 
 #include "common.h"
 
+namespace dwave::samplers::tabu {
+
 using std::vector;
 
 BQP::BQP(std::vector<std::vector<double>> Q) 
@@ -32,7 +34,7 @@ BQP::BQP(std::vector<std::vector<double>> Q)
       upperBound{-std::numeric_limits<double>::max()} {
     
     for (int i = 0; i < nVars; i++) {
-        if (Q[i].size() != nVars) {
+        if (Q[i].size() != (size_t)nVars) {
             throw Exception("Q must be a symmetric square matrix");
         }
         for (int j = i; j < nVars; j++) {
@@ -119,3 +121,5 @@ void BQP::printSolution() {
     }
     printf("\n");
 }
+
+}  // namespace dwave::samplers::tabu

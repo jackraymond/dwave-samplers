@@ -1,5 +1,16 @@
-# distutils: language = c++
-# cython: language_level = 3
+# Copyright 2019 D-Wave
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 from cython.operator cimport preincrement as inc, dereference as deref
 
@@ -33,7 +44,7 @@ cdef adj_t _cybqm_to_adj(dimod.cyBQM_float64 cybqm):
     return adj
 
 
-cdef void _elim_adj(adj_t& adj, Py_ssize_t vi) except +:
+cdef void _elim_adj(adj_t& adj, Py_ssize_t vi):
     """Remove vi from adj and make its neighborhood a clique."""
 
     # make the neighborhood of vi a clique
@@ -76,7 +87,7 @@ def elimination_order_width(bqm, order):
     for v in order:
         vi = cybqm.variables.index(v)
 
-        if adj[vi].size() > treewidth:
+        if <Py_ssize_t>(adj[vi].size()) > treewidth:
             treewidth = adj[vi].size()
 
         _elim_adj(adj, vi)
@@ -97,7 +108,7 @@ cdef Py_ssize_t _min_num_edges(adj_t& adj):
     # C++ lambdas don't work so well in Cython so we do 'min' the hard way...
 
     cdef Py_ssize_t min_num_edges = adj.size() * adj.size()
-    cdef Py_ssize_t min_node  # our return value
+    cdef Py_ssize_t min_node  = -1 # our return value
 
 
     cdef Py_ssize_t num_edges
@@ -153,7 +164,7 @@ def min_fill_heuristic(bqm):
     while adj.size():
         vi = _min_num_edges(adj)
 
-        if adj[vi].size() > upper_bound:
+        if <Py_ssize_t>(adj[vi].size()) > upper_bound:
             upper_bound = adj[vi].size()
 
         # remove vi from adj
@@ -161,7 +172,6 @@ def min_fill_heuristic(bqm):
 
         order.push_back(vi)
 
-    cdef Py_ssize_t i
     variables = []
     for i in range(order.size()):
         variables.append(cybqm.variables.at(order[i]))

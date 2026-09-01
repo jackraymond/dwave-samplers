@@ -1,8 +1,3 @@
-# distutils: language = c++
-# distutils: include_dirs = greedy/src/
-# distutils: include_dirs = dwave/samplers/greedy/src/
-# distutils: sources = dwave/samplers/greedy/src/descent.cpp
-
 # Copyright 2019 D-Wave Systems Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,18 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from libc.stdint cimport int8_t
 from libcpp cimport bool
 from libcpp.vector cimport vector
 
 import numpy as np
-cimport numpy as np
 
 cimport dwave.samplers.greedy.decl as decl
 
 def steepest_gradient_descent(num_samples,
                               linear_biases,
                               coupler_starts, coupler_ends, coupler_weights,
-                              np.ndarray[np.int8_t, ndim=2, mode="c"] states_numpy,
+                              int8_t[:, ::1] states_numpy,
                               large_sparse_opt=False):
 
     """Wraps `steepest_gradient_descent` from `descent.cpp`. Accepts
@@ -94,7 +89,7 @@ def steepest_gradient_descent(num_samples,
     cdef unsigned[:] num_steps = num_steps_numpy
 
     # explicitly convert all Python types to C while we have the GIL
-    cdef np.int8_t* _states = &states_numpy[0, 0]
+    cdef int8_t* _states = &states_numpy[0, 0]
     cdef double* _energies = &energies[0]
     cdef unsigned* _num_steps = &num_steps[0]
     cdef int _num_samples = num_samples

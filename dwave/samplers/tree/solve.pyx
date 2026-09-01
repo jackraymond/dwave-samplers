@@ -1,7 +1,3 @@
-# distutils: language = c++
-# cython: language_level = 3
-# distutils: include_dirs = dwave/samplers/tree/src/include/
-
 # Copyright 2019 D-Wave Systems Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,19 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+cimport cython
 import dimod
 import numpy as np
 
-cimport cython
-cimport numpy as np
 from cython.operator cimport dereference as deref
 from dimod cimport cyBQM_float64
 from dimod.libcpp cimport BinaryQuadraticModel as cppBinaryQuadraticModel
 from dimod.binary.binary_quadratic_model import BinaryQuadraticModel
 
-from dwave.samplers.tree.orang cimport energies_type, samples_type, PyArray_ENABLEFLAGS
-
-cdef extern from "src/include/solve.hpp":
+cdef extern from "solve.hpp":
     void solveBQM[V, B](cppBinaryQuadraticModel[B, V]& refBQM,
                         int* var_order,
                         double beta,
@@ -37,6 +30,9 @@ cdef extern from "src/include/solve.hpp":
                         int max_solutions,
                         double** energies_data, int* energies_len,
                         int** sols_data, int* sols_rows, int* sols_cols) except +
+
+ctypedef double energies_type
+ctypedef int samples_type
 
 samples_dtype = np.intc  # needs to be consistent with samples_type
 energies_dtype = np.double  # needs to be consistent with energies_type 
@@ -98,20 +94,16 @@ def solve_bqm_wrapper(bqm: BinaryQuadraticModel,
 
     # create a numpy array without making a copy then tell numpy it needs to
     # free the memory
-    samples = np.asarray(<samples_type[:srows, :scols]> samples_pointer)
-    PyArray_ENABLEFLAGS(samples, np.NPY_OWNDATA)
+    samples = np.asarray(<samples_type[:srows, :scols]> samples_pointer, copy=True)
 
     # convert the samples to spin if necessary
-    cdef size_t i, j
     if low == -1:
         for i in range(srows):
             for j in range(scols):
                 if samples[i, j] == 0:
                     samples[i, j] = -1
 
-    energies = np.asarray(<energies_type[:num_energies]> energies_pointer)
-
-    PyArray_ENABLEFLAGS(energies, np.NPY_OWNDATA)
+    energies = np.asarray(<energies_type[:num_energies]> energies_pointer, copy=True)
 
     energies += bqm.offset
 
