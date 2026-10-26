@@ -18,6 +18,7 @@ import dimod
 import numpy as np
 
 from dwave.samplers.planar import PlanarGraphSolver
+from dwave.samplers.planar import PlanarGraphSampler
 
 
 class TestGroundStateBQM(unittest.TestCase):
@@ -155,3 +156,91 @@ class TestGroundStateBQM(unittest.TestCase):
              (15, 6): -1, (15, 7): -1, (15, 8): -1, (15, 9): -1, (15, 10): -1, (15, 11): -1, (15, 12): -1, (15, 13): -1,
              (15, 14): -1, (15, 15): -1}
         )
+
+
+class TestLogPartitionFunction(unittest.TestCase):
+    def _brute_force_logZ(self, bqm, beta=1.0):
+        import itertools
+        en = [-beta * bqm.energy(dict(zip(bqm.variables, config)))
+              for config in itertools.product((-1, 1), repeat=len(bqm))]
+        return np.log(np.sum(np.exp(en)))
+
+    def test_three_path_bqm(self):
+        bqm = dimod.BinaryQuadraticModel.empty(dimod.SPIN)
+        bqm.add_interaction(0, 1, .69)
+        bqm.add_interaction(1, 2, +1.0)
+        bqm.add_interaction(2, 0, .5)
+        bqm.add_offset(0)
+
+        pos = {0: (0, 0), 1: (1, 0), 2: (0, 1)}
+
+        sampleset = PlanarGraphSampler().sample(bqm, pos)
+        logZ = sampleset.info['log_partition_function']
+
+        self.assertAlmostEqual(logZ, self._brute_force_logZ(bqm))
+
+    def test_four_path_bqm(self):
+        bqm = dimod.BinaryQuadraticModel.empty(dimod.SPIN)
+        bqm.add_interaction(0, 1, +1.0)
+        bqm.add_interaction(1, 2, +1.0)
+        bqm.add_interaction(2, 3, +1.0)
+        bqm.add_interaction(0, 3, +1.0)
+        bqm.add_offset(1.8)
+
+        pos = {0: (+1, +1), 1: (-1, +1), 2: (-1, -1), 3: (+1, -1)}
+
+        sampleset = PlanarGraphSampler().sample(bqm, pos)
+        logZ = sampleset.info['log_partition_function']
+
+        self.assertAlmostEqual(logZ, self._brute_force_logZ(bqm))
+
+    def test_square_with_chord(self):
+        bqm = dimod.BinaryQuadraticModel.from_ising(
+            {0: -0.0, 1: -0.0, 2: -0.0, 3: -0.0},
+            {(1, 2): 2, (0, 1): 1, (1, 3): 1, (2, 3): 1, (0, 2): 1})
+        pos = {0: (0, 0), 1: (0, 1), 2: (1, 0), 3: (1, 1)}
+
+        sampleset = PlanarGraphSampler().sample(bqm, pos)
+        logZ = sampleset.info['log_partition_function']
+
+        self.assertAlmostEqual(logZ, self._brute_force_logZ(bqm))
+
+    def test_beta(self):
+        bqm = dimod.BinaryQuadraticModel.empty(dimod.SPIN)
+        bqm.add_interaction(0, 1, .69)
+        bqm.add_interaction(1, 2, +1.0)
+        bqm.add_interaction(2, 0, .5)
+
+        pos = {0: (0, 0), 1: (1, 0), 2: (0, 1)}
+
+        for beta in (0.1, 0.5, 2.0):
+            sampleset = PlanarGraphSampler().sample(bqm, pos, beta=beta)
+            logZ = sampleset.info['log_partition_function']
+            self.assertAlmostEqual(logZ, self._brute_force_logZ(bqm, beta=beta))
+
+    def test_no_pos_provided(self):
+        bqm = dimod.BinaryQuadraticModel.empty(dimod.SPIN)
+        bqm.add_interaction('a', 'b', +1.0)
+        bqm.add_interaction('b', 'c', +1.0)
+        bqm.add_interaction('c', 'a', +1.0)
+
+        sampleset = PlanarGraphSampler().sample(bqm)
+
+        self.assertIn('log_partition_function', sampleset.info)
+
+    def test_empty_sampleset(self):
+        bqm = dimod.BinaryQuadraticModel.empty(dimod.SPIN)
+        bqm.add_interaction('a', 'b', +1.0)
+        bqm.add_interaction('b', 'c', +1.0)
+        bqm.add_interaction('c', 'a', +1.0)
+
+        sampleset = PlanarGraphSampler().sample(bqm)
+
+        self.assertEqual(len(sampleset), 0)
+        self.assertEqual(set(sampleset.variables), set(bqm.variables))
+
+    def test_too_few_variables(self):
+        bqm = dimod.BinaryQuadraticModel.from_ising({}, {(0, 1): 1})
+
+        with self.assertRaises(ValueError):
+            PlanarGraphSampler().sample(bqm)

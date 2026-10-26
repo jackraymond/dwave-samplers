@@ -17,11 +17,13 @@ import typing
 
 import dimod
 import networkx as nx
+import numpy as np
 
+from dwave.samplers.planar.partition import log_partition_bqm
 from dwave.samplers.planar.planar import rotation_from_coordinates, plane_triangulate, expanded_dual
 from dwave.samplers.planar.util import bqm_to_multigraph
 
-__all__ = ["PlanarGraphSolver"]
+__all__ = ["PlanarGraphSolver", "PlanarGraphSampler"]
 
 
 class PlanarGraphSolver(dimod.Sampler, dimod.Initialized):
@@ -92,6 +94,75 @@ class PlanarGraphSolver(dimod.Sampler, dimod.Initialized):
             state = {v: 2 * b - 1 for v, b in state.items()}
 
         return dimod.SampleSet.from_samples_bqm(state, bqm)
+
+
+class PlanarGraphSampler(dimod.Sampler, dimod.Initialized):
+    """A sampler for planar Ising problems with no linear biases.
+
+    The sampler exactly computes the log partition function of a planar Ising
+    model at a given inverse temperature using the Kasteleyn method and returns
+    it in the sample set's :attr:`~dimod.SampleSet.info` field.
+    """
+    parameters: typing.Dict[str, typing.Sequence[str]] = dict(pos=tuple(), beta=tuple())
+    """Keyword arguments accepted by the sampling methods."""
+    properties: typing.Dict[str, typing.Any] = dict()
+    """Values for parameters accepted by the sampling methods."""
+
+    def __init__(self):
+        self.parameters = copy.deepcopy(self.parameters)
+        self.properties = copy.deepcopy(self.properties)
+
+    def sample(self,
+               bqm: dimod.BinaryQuadraticModel,
+               pos: typing.Optional[typing.Mapping[dimod.typing.Variable, typing.Tuple[float, float]]] = None,
+               beta: float = 1.0,
+               **kwargs) -> dimod.SampleSet:
+        """Sample from a planar Ising problem without linear biases.
+
+        Args:
+            bqm: Binary quadratic model representing a planar Ising model with no linear biases.
+            pos: Position for each node as a dict of form ``{node: (x-coordinate, y-coordinate),...}``.
+            beta: `Boltzmann distribution`_ inverse temperature parameter.
+
+        Returns:
+            An empty :class:`~dimod.SampleSet`. The ``info`` field contains:
+
+                * ``'log_partition_function'``: The log partition function at
+                  inverse temperature ``beta``.
+
+        Examples:
+            >>> import dimod
+            >>> from dwave.samplers.planar import PlanarGraphSampler
+            >>> bqm = dimod.BinaryQuadraticModel.empty(dimod.SPIN)
+            >>> bqm.add_interaction('a', 'b', +1.0)
+            >>> bqm.add_interaction('b', 'c', +1.0)
+            >>> bqm.add_interaction('c', 'a', +1.0)
+            >>> pos = {'a': (0, 0), 'b': (1, 0), 'c': (0, 1)}
+            >>> sampleset = PlanarGraphSampler().sample(bqm, pos)
+            >>> sampleset.info['log_partition_function']  # doctest: +SKIP
+            2.0825402296228025
+
+        .. _Boltzmann distribution: https://en.wikipedia.org/wiki/Boltzmann_distribution
+
+        """
+        if len(bqm) < 3:
+            raise ValueError("The provided BQM must have at least three variables")
+
+        if pos is None:
+            G, _ = bqm_to_multigraph(bqm)
+            pos = _determine_pos(G)
+
+        if beta != 1.0:
+            bqm = bqm.change_vartype(dimod.SPIN, inplace=False)
+            bqm.scale(beta)
+
+        logZ = log_partition_bqm(bqm, pos)
+
+        info = {'log_partition_function': logZ}
+
+        samples = np.empty((0, len(bqm)), dtype=np.int8)
+        return dimod.SampleSet.from_samples((samples, list(bqm.variables)),
+                                            bqm.vartype, energy=[], info=info)
 
 
 def _determine_pos(G: nx.MultiGraph) -> dict:
