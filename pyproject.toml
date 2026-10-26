@@ -38,7 +38,6 @@ dependencies = [
     "dimod>=0.12.21,<0.13.0",  # oldest dimod that supports Python 3.14
     "networkx>=3,<4",
     "numpy>=2,<3 ",
-    "scipy>=1.7,<2",
 ]
 
 [project.readme]

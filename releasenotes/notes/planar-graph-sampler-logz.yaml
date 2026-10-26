@@ -1,0 +1,8 @@
+---
+features:
+  - |
+    Add ``PlanarGraphSampler``, a companion to ``PlanarGraphSolver`` for planar
+    Ising problems with no linear biases. The sampler exactly computes the log
+    partition function at a given inverse temperature (``beta``) using the
+    Kasteleyn method and returns it in the sample set's ``info`` field under the
+    key ``'log_partition_function'``. The returned sample set is currently empty.
