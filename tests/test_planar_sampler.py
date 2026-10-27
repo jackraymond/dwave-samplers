@@ -228,19 +228,90 @@ class TestLogPartitionFunction(unittest.TestCase):
 
         self.assertIn('log_partition_function', sampleset.info)
 
-    def test_empty_sampleset(self):
-        bqm = dimod.BinaryQuadraticModel.empty(dimod.SPIN)
-        bqm.add_interaction('a', 'b', +1.0)
-        bqm.add_interaction('b', 'c', +1.0)
-        bqm.add_interaction('c', 'a', +1.0)
+    def test_disconnected_log_partition(self):
+        # two independent triangles; each component has its own flip symmetry
+        bqm = dimod.BinaryQuadraticModel.from_ising(
+            {}, {(0, 1): 1.0, (1, 2): -1.0, (0, 2): 0.5,
+                 (3, 4): 0.8, (4, 5): 1.2, (3, 5): -0.6})
 
-        sampleset = PlanarGraphSampler().sample(bqm)
+        sampleset = PlanarGraphSampler().sample(bqm, num_reads=1, seed=0)
 
-        self.assertEqual(len(sampleset), 0)
-        self.assertEqual(set(sampleset.variables), set(bqm.variables))
+        self.assertAlmostEqual(sampleset.info['log_partition_function'],
+                               self._brute_force_logZ(bqm))
 
     def test_too_few_variables(self):
         bqm = dimod.BinaryQuadraticModel.from_ising({}, {(0, 1): 1})
 
         with self.assertRaises(ValueError):
             PlanarGraphSampler().sample(bqm)
+
+
+class TestSampling(unittest.TestCase):
+    def _exact_probabilities(self, bqm, beta=1.0):
+        import itertools
+        variables = list(bqm.variables)
+        spin = bqm.change_vartype(dimod.SPIN, inplace=False)
+        weights = {config: np.exp(-beta * spin.energy(dict(zip(variables, config))))
+                   for config in itertools.product((-1, 1), repeat=len(variables))}
+        Z = sum(weights.values())
+        return variables, {c: w / Z for c, w in weights.items()}
+
+    def _max_abs_error(self, bqm, beta=1.0, num_reads=2000, seed=42):
+        from collections import Counter
+        variables, exact = self._exact_probabilities(bqm, beta=beta)
+        sampleset = PlanarGraphSampler().sample(bqm, beta=beta,
+                                                num_reads=num_reads, seed=seed)
+        order = list(sampleset.variables)
+        idx = [order.index(v) for v in variables]
+
+        def to_spin(x):
+            return x if bqm.vartype is dimod.SPIN else 2 * x - 1
+
+        counts = Counter(tuple(to_spin(int(row[i])) for i in idx)
+                         for row in sampleset.record.sample)
+        return max(abs(counts.get(c, 0) / num_reads - p) for c, p in exact.items())
+
+    def test_triangle_distribution(self):
+        bqm = dimod.BinaryQuadraticModel.from_ising(
+            {}, {(0, 1): 1.0, (1, 2): 1.0, (0, 2): 1.0})
+        self.assertLess(self._max_abs_error(bqm), 0.05)
+
+    def test_square_with_chord_distribution(self):
+        bqm = dimod.BinaryQuadraticModel.from_ising(
+            {}, {(1, 2): 2, (0, 1): 1, (1, 3): 1, (2, 3): 1, (0, 2): 1})
+        self.assertLess(self._max_abs_error(bqm), 0.05)
+
+    def test_asymmetric_couplings_distribution(self):
+        bqm = dimod.BinaryQuadraticModel.from_ising(
+            {}, {(0, 1): 0.7, (1, 2): -1.3, (0, 2): 0.4, (2, 3): 0.9, (0, 3): -0.5})
+        self.assertLess(self._max_abs_error(bqm), 0.05)
+
+    def test_beta_distribution(self):
+        bqm = dimod.BinaryQuadraticModel.from_ising(
+            {}, {(0, 1): 0.7, (1, 2): -1.3, (0, 2): 0.4, (2, 3): 0.9, (0, 3): -0.5})
+        self.assertLess(self._max_abs_error(bqm, beta=2.0), 0.05)
+
+    def test_disconnected_distribution(self):
+        bqm = dimod.BinaryQuadraticModel.from_ising(
+            {}, {(0, 1): 1.0, (1, 2): -1.0, (0, 2): 0.5,
+                 (3, 4): 0.8, (4, 5): 1.2, (3, 5): -0.6})
+        self.assertLess(self._max_abs_error(bqm), 0.05)
+
+    def test_binary_vartype(self):
+        bqm = dimod.BinaryQuadraticModel.from_ising(
+            {}, {(0, 1): 1.0, (1, 2): 1.0, (0, 2): 1.0}
+        ).change_vartype(dimod.BINARY, inplace=False)
+        sampleset = PlanarGraphSampler().sample(bqm, num_reads=10, seed=0)
+        self.assertEqual(sampleset.vartype, dimod.BINARY)
+        self.assertTrue(set(np.unique(sampleset.record.sample)).issubset({0, 1}))
+        self.assertLess(self._max_abs_error(bqm), 0.05)
+
+    def test_num_reads_and_energies(self):
+        bqm = dimod.BinaryQuadraticModel.from_ising(
+            {}, {(0, 1): 1.0, (1, 2): 1.0, (0, 2): 1.0})
+        sampleset = PlanarGraphSampler().sample(bqm, num_reads=7, seed=0)
+        self.assertEqual(sampleset.record.sample.shape, (7, 3))
+        np.testing.assert_allclose(
+            sampleset.record.energy,
+            bqm.energies((sampleset.record.sample, list(sampleset.variables))))
+

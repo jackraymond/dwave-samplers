@@ -97,13 +97,21 @@ class PlanarGraphSolver(dimod.Sampler, dimod.Initialized):
 
 
 class PlanarGraphSampler(dimod.Sampler, dimod.Initialized):
-    """A sampler for planar Ising problems with no linear biases.
+    """A fair sampler for planar Ising problems with no linear biases.
 
-    The sampler exactly computes the log partition function of a planar Ising
-    model at a given inverse temperature using the Kasteleyn method and returns
-    it in the sample set's :attr:`~dimod.SampleSet.info` field.
+    Draws exact (fair) samples from the Boltzmann distribution of a planar Ising
+    model using a contraction-tree scheme: an edge is contracted under the two
+    relative-orientation hypotheses (agree/disagree), and the resulting exact
+    partition functions (computed with the Kasteleyn method) give the
+    conditional probability of that orientation. Iterating over a spanning tree
+    of each connected component fixes a state up to the per-component global
+    spin-flip symmetry, which is then broken uniformly at random.
+
+    The log partition function is returned in the sample set's
+    :attr:`~dimod.SampleSet.info` field.
     """
-    parameters: typing.Dict[str, typing.Sequence[str]] = dict(pos=tuple(), beta=tuple())
+    parameters: typing.Dict[str, typing.Sequence[str]] = dict(
+        pos=tuple(), beta=tuple(), num_reads=tuple(), seed=tuple())
     """Keyword arguments accepted by the sampling methods."""
     properties: typing.Dict[str, typing.Any] = dict()
     """Values for parameters accepted by the sampling methods."""
@@ -116,16 +124,22 @@ class PlanarGraphSampler(dimod.Sampler, dimod.Initialized):
                bqm: dimod.BinaryQuadraticModel,
                pos: typing.Optional[typing.Mapping[dimod.typing.Variable, typing.Tuple[float, float]]] = None,
                beta: float = 1.0,
+               num_reads: int = 1,
+               seed: typing.Optional[int] = None,
                **kwargs) -> dimod.SampleSet:
-        """Sample from a planar Ising problem without linear biases.
+        """Draw fair samples from a planar Ising problem without linear biases.
 
         Args:
             bqm: Binary quadratic model representing a planar Ising model with no linear biases.
             pos: Position for each node as a dict of form ``{node: (x-coordinate, y-coordinate),...}``.
+                Optional; a planar embedding is determined automatically when omitted.
             beta: `Boltzmann distribution`_ inverse temperature parameter.
+            num_reads: Number of samples to draw.
+            seed: Seed for the pseudo-random number generator.
 
         Returns:
-            An empty :class:`~dimod.SampleSet`. The ``info`` field contains:
+            A :class:`~dimod.SampleSet` with ``num_reads`` samples. The ``info``
+            field contains:
 
                 * ``'log_partition_function'``: The log partition function at
                   inverse temperature ``beta``.
@@ -137,8 +151,7 @@ class PlanarGraphSampler(dimod.Sampler, dimod.Initialized):
             >>> bqm.add_interaction('a', 'b', +1.0)
             >>> bqm.add_interaction('b', 'c', +1.0)
             >>> bqm.add_interaction('c', 'a', +1.0)
-            >>> pos = {'a': (0, 0), 'b': (1, 0), 'c': (0, 1)}
-            >>> sampleset = PlanarGraphSampler().sample(bqm, pos)
+            >>> sampleset = PlanarGraphSampler().sample(bqm, num_reads=10)
             >>> sampleset.info['log_partition_function']  # doctest: +SKIP
             2.0825402296228025
 
@@ -148,21 +161,31 @@ class PlanarGraphSampler(dimod.Sampler, dimod.Initialized):
         if len(bqm) < 3:
             raise ValueError("The provided BQM must have at least three variables")
 
-        if pos is None:
-            G, _ = bqm_to_multigraph(bqm)
-            pos = _determine_pos(G)
+        rng = np.random.default_rng(seed)
 
+        # work in spin space (the planar method requires zero linear biases);
+        # scaling the whole model by beta realizes the inverse temperature
+        work = bqm.spin.change_vartype(dimod.SPIN, inplace=False)
         if beta != 1.0:
-            bqm = bqm.change_vartype(dimod.SPIN, inplace=False)
-            bqm.scale(beta)
+            work.scale(beta)
 
-        logZ = log_partition_bqm(bqm, pos)
+        logZ = _log_partition(work)
 
-        info = {'log_partition_function': logZ}
+        variables = list(bqm.variables)
+        to_binary = bqm.vartype is dimod.BINARY
 
-        samples = np.empty((0, len(bqm)), dtype=np.int8)
-        return dimod.SampleSet.from_samples((samples, list(bqm.variables)),
-                                            bqm.vartype, energy=[], info=info)
+        samples = np.empty((num_reads, len(variables)), dtype=np.int8)
+        for i in range(num_reads):
+            state = _sample_state(work, rng)
+            for j, v in enumerate(variables):
+                s = state[v]
+                samples[i, j] = (s + 1) // 2 if to_binary else s
+
+        energies = bqm.energies((samples, variables))
+
+        return dimod.SampleSet.from_samples((samples, variables),
+                                            bqm.vartype, energy=energies,
+                                            info={'log_partition_function': logZ})
 
 
 def _determine_pos(G: nx.MultiGraph) -> dict:
@@ -211,3 +234,98 @@ def _cut_to_state(G: nx.MultiGraph, cut: set, node=None, val=0) -> dict:
     _cut_to_state0(node, val)
 
     return state
+
+
+def _interaction_graph(bqm: dimod.BinaryQuadraticModel) -> nx.Graph:
+    # exactly-zero couplings (e.g. from exact cancellation during contraction)
+    # carry no interaction and must not connect otherwise-independent spins
+    g = nx.Graph()
+    g.add_nodes_from(bqm.variables)
+    for (u, v), bias in bqm.quadratic.items():
+        if bias != 0.0:
+            g.add_edge(u, v)
+    return g
+
+
+def _restrict(bqm: dimod.BinaryQuadraticModel, component: set) -> dimod.BinaryQuadraticModel:
+    """Build the sub-model on ``component`` using only its nonzero couplings."""
+    cset = set(component)
+    sub = dimod.BinaryQuadraticModel(dimod.SPIN)
+    sub.add_linear_from((v, 0.0) for v in component)
+    for (u, v), bias in bqm.quadratic.items():
+        if bias != 0.0 and u in cset and v in cset:
+            sub.set_quadratic(u, v, bias)
+    return sub
+
+
+def _log_partition(bqm: dimod.BinaryQuadraticModel) -> float:
+    """Log partition function of a spin model with zero linear biases.
+
+    The partition function factorizes over the connected components of the
+    interaction graph; each component contributes its own global spin-flip
+    symmetry. Components with fewer than three spins are evaluated in closed
+    form and larger components use the planar Kasteleyn method.
+    """
+    logZ = -bqm.offset
+
+    for component in nx.connected_components(_interaction_graph(bqm)):
+        component = list(component)
+
+        if len(component) == 1:
+            logZ += np.log(2)
+        elif len(component) == 2:
+            u, v = component
+            j = bqm.get_quadratic(u, v)
+            logZ += np.log(2) + np.logaddexp(j, -j)
+        else:
+            sub = _restrict(bqm, component)
+            G, _ = bqm_to_multigraph(sub)
+            logZ += log_partition_bqm(sub, _determine_pos(G))
+
+    return logZ
+
+
+def _sample_state(bqm: dimod.BinaryQuadraticModel, rng: np.random.Generator) -> dict:
+    """Draw one fair spin sample via the contraction-tree scheme.
+
+    ``bqm`` is a spin model with zero linear biases whose couplings already
+    include the inverse-temperature factor.
+    """
+    state = {}
+
+    for component in nx.connected_components(_interaction_graph(bqm)):
+        component = list(component)
+
+        if len(component) == 1:
+            state[component[0]] = int(rng.choice((-1, 1)))
+            continue
+
+        work = _restrict(bqm, component)
+        root = component[0]
+        signs = {root: 1}  # spin of each variable relative to the root
+
+        for v in component[1:]:
+            agree = work.copy()
+            agree.contract_variables(root, v)
+
+            disagree = work.copy()
+            disagree.flip_variable(v)
+            disagree.contract_variables(root, v)
+
+            logZ_agree = _log_partition(agree)
+            logZ_disagree = _log_partition(disagree)
+
+            p_agree = np.exp(logZ_agree - np.logaddexp(logZ_agree, logZ_disagree))
+
+            if rng.random() < p_agree:
+                work, signs[v] = agree, 1
+            else:
+                work, signs[v] = disagree, -1
+
+        # break the component's global spin-flip symmetry uniformly
+        flip = int(rng.choice((-1, 1)))
+        for v in component:
+            state[v] = flip * signs[v]
+
+    return state
+
