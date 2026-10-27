@@ -148,14 +148,10 @@ class PlanarGraphSampler(dimod.Sampler):
 
             If ``marginals=True``, also contains:
 
-                * ``'variable_marginals'``: Dict of the form ``{v: p, ...}``, where
-                  ``p = prob(v == 1)``. With no linear biases every marginal is
-                  ``0.5`` by the global spin-flip symmetry.
-                * ``'interaction_marginals'``: Dict of the form
-                  ``{(u, v): {(s, t): p, ...}, ...}``, where ``(u, v)`` is an
-                  interaction in the binary quadratic model and
-                  ``p = prob(u == s & v == t)``, computed by the edge-expectation
-                  method.
+                * ``'correlations'``: Dict of the form ``{(u, v): c, ...}``, where
+                  ``(u, v)`` is an interaction in the binary quadratic model and
+                  ``c = sum_{s, t} s * t * prob(u == s & v == t)`` is the
+                  two-point correlation, computed by the edge-expectation method.
 
         Examples:
             >>> import dimod
@@ -186,8 +182,7 @@ class PlanarGraphSampler(dimod.Sampler):
 
         info: typing.Dict[str, typing.Any] = {'log_partition_function': logZ}
         if marginals:
-            info['variable_marginals'] = {v: 0.5 for v in bqm.variables}
-            info['interaction_marginals'] = _interaction_marginals(
+            info['correlations'] = _correlations(
                 work, bqm.quadratic, bqm.vartype)
 
         variables = list(bqm.variables)
@@ -317,20 +312,21 @@ def _log_partition(bqm: dimod.BinaryQuadraticModel) -> float:
     return float(logZ)
 
 
-def _interaction_marginals(bqm: dimod.BinaryQuadraticModel, interactions,
-                           vartype: dimod.Vartype) -> dict:
-    """Edge-expectation interaction marginals for a zero-field spin model.
+def _correlations(bqm: dimod.BinaryQuadraticModel, interactions,
+                  vartype: dimod.Vartype) -> dict:
+    """Edge-expectation two-point correlations for a zero-field spin model.
 
     ``bqm`` is a spin model whose couplings already include the
     inverse-temperature factor. For each interaction the probability that the
-    two spins agree is ``Z_agree / (Z_agree + Z_disagree)``; the global
-    spin-flip symmetry splits each of the agree/disagree probabilities evenly
-    between its two matching joint configurations.
+    two spins agree is ``Z_agree / (Z_agree + Z_disagree)``. The correlation is
+    ``sum_{s, t} s * t * prob(u == s & v == t)``; by spin-flip symmetry the two
+    agreeing configurations share the product ``low * low`` and the two
+    disagreeing ones share ``1 * low``, so the sum collapses to the closed form
+    below.
     """
     low = -1 if vartype is dimod.SPIN else 0
-    configs = ((low, low), (1, low), (low, 1), (1, 1))
 
-    marginals = {}
+    correlations = {}
     for u, v in interactions:
         agree = bqm.copy()
         agree.contract_variables(u, v)
@@ -345,10 +341,9 @@ def _interaction_marginals(bqm: dimod.BinaryQuadraticModel, interactions,
         p_agree = np.exp(logZ_agree - np.logaddexp(logZ_agree, logZ_disagree))
         p_disagree = 1.0 - p_agree
 
-        probs = (p_agree / 2, p_disagree / 2, p_disagree / 2, p_agree / 2)
-        marginals[(u, v)] = dict(zip(configs, probs))
+        correlations[(u, v)] = p_agree * (low ** 2 + 1) / 2 + p_disagree * low
 
-    return marginals
+    return correlations
 
 
 def _sample_state(bqm: dimod.BinaryQuadraticModel, rng: np.random.Generator) -> dict:

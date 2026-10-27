@@ -325,64 +325,51 @@ class TestSampling(unittest.TestCase):
 
 
 class TestMarginals(unittest.TestCase):
-    def _brute_interaction_marginals(self, bqm, beta=1.0):
+    def _brute_correlations(self, bqm, beta=1.0):
         import itertools
         variables = list(bqm.variables)
         spin = bqm.change_vartype(dimod.SPIN, inplace=False)
         weights = {config: np.exp(-beta * spin.energy(dict(zip(variables, config))))
                    for config in itertools.product((-1, 1), repeat=len(variables))}
         Z = sum(weights.values())
-        low = -1 if bqm.vartype is dimod.SPIN else 0
 
         def to_native(s):
             return s if bqm.vartype is dimod.SPIN else (s + 1) // 2
 
-        marginals = {}
+        correlations = {}
         for u, v in bqm.quadratic:
-            probs = {}
+            c = 0.0
             for su in (-1, 1):
                 for sv in (-1, 1):
-                    p = sum(w / Z for c, w in weights.items()
-                            if dict(zip(variables, c))[u] == su
-                            and dict(zip(variables, c))[v] == sv)
-                    probs[(to_native(su), to_native(sv))] = p
-            marginals[(u, v)] = probs
-        return marginals
+                    p = sum(w / Z for config, w in weights.items()
+                            if dict(zip(variables, config))[u] == su
+                            and dict(zip(variables, config))[v] == sv)
+                    c += to_native(su) * to_native(sv) * p
+            correlations[(u, v)] = c
+        return correlations
 
-    def test_variable_marginals_are_half(self):
-        bqm = dimod.BinaryQuadraticModel.from_ising(
-            {}, {(0, 1): 1.0, (1, 2): -0.7, (0, 2): 0.4})
-        sampleset = PlanarGraphSampler().sample(bqm, num_reads=1, seed=0)
-        self.assertEqual(sampleset.info['variable_marginals'],
-                         {v: 0.5 for v in bqm.variables})
-
-    def test_interaction_marginals_spin(self):
+    def test_correlations_spin(self):
         bqm = dimod.BinaryQuadraticModel.from_ising(
             {}, {(1, 2): 2, (0, 1): 1, (1, 3): 1, (2, 3): 1, (0, 2): 1})
         sampleset = PlanarGraphSampler().sample(bqm, beta=0.8, num_reads=1, seed=0)
-        exact = self._brute_interaction_marginals(bqm, beta=0.8)
-        for edge, probs in sampleset.info['interaction_marginals'].items():
-            for config, p in probs.items():
-                self.assertAlmostEqual(p, exact[edge][config])
+        exact = self._brute_correlations(bqm, beta=0.8)
+        for edge, c in sampleset.info['correlations'].items():
+            self.assertAlmostEqual(c, exact[edge])
 
-    def test_interaction_marginals_binary(self):
+    def test_correlations_binary(self):
         bqm = dimod.BinaryQuadraticModel.from_ising(
             {}, {(0, 1): 1.0, (1, 2): -0.7, (0, 2): 0.4}
         ).change_vartype(dimod.BINARY, inplace=False)
         sampleset = PlanarGraphSampler().sample(bqm, num_reads=1, seed=0)
-        exact = self._brute_interaction_marginals(bqm)
-        marginals = sampleset.info['interaction_marginals']
-        for edge, probs in marginals.items():
-            self.assertEqual(set(probs), {(0, 0), (1, 0), (0, 1), (1, 1)})
-            for config, p in probs.items():
-                self.assertAlmostEqual(p, exact[edge][config])
+        exact = self._brute_correlations(bqm)
+        for edge, c in sampleset.info['correlations'].items():
+            self.assertAlmostEqual(c, exact[edge])
 
     def test_marginals_false_omits_them(self):
         bqm = dimod.BinaryQuadraticModel.from_ising(
             {}, {(0, 1): 1.0, (1, 2): 1.0, (0, 2): 1.0})
         sampleset = PlanarGraphSampler().sample(bqm, num_reads=1, seed=0,
                                                 marginals=False)
-        self.assertNotIn('variable_marginals', sampleset.info)
-        self.assertNotIn('interaction_marginals', sampleset.info)
+        self.assertNotIn('correlations', sampleset.info)
 
 
