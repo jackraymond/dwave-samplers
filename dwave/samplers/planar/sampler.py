@@ -111,7 +111,7 @@ class PlanarGraphSampler(dimod.Sampler, dimod.Initialized):
     :attr:`~dimod.SampleSet.info` field.
     """
     parameters: typing.Dict[str, typing.Sequence[str]] = dict(
-        pos=tuple(), beta=tuple(), num_reads=tuple(), seed=tuple())
+        beta=tuple(), num_reads=tuple(), marginals=tuple(), seed=tuple())
     """Keyword arguments accepted by the sampling methods."""
     properties: typing.Dict[str, typing.Any] = dict()
     """Values for parameters accepted by the sampling methods."""
@@ -122,19 +122,19 @@ class PlanarGraphSampler(dimod.Sampler, dimod.Initialized):
 
     def sample(self,
                bqm: dimod.BinaryQuadraticModel,
-               pos: typing.Optional[typing.Mapping[dimod.typing.Variable, typing.Tuple[float, float]]] = None,
                beta: float = 1.0,
                num_reads: int = 1,
+               marginals: bool = True,
                seed: typing.Optional[int] = None,
                **kwargs) -> dimod.SampleSet:
         """Draw fair samples from a planar Ising problem without linear biases.
 
         Args:
             bqm: Binary quadratic model representing a planar Ising model with no linear biases.
-            pos: Position for each node as a dict of form ``{node: (x-coordinate, y-coordinate),...}``.
-                Optional; a planar embedding is determined automatically when omitted.
             beta: `Boltzmann distribution`_ inverse temperature parameter.
             num_reads: Number of samples to draw.
+            marginals: Whether to compute the marginals. If True, they are
+                included in the returned :class:`~dimod.SampleSet`'s ``info`` field.
             seed: Seed for the pseudo-random number generator.
 
         Returns:
@@ -143,6 +143,17 @@ class PlanarGraphSampler(dimod.Sampler, dimod.Initialized):
 
                 * ``'log_partition_function'``: The log partition function at
                   inverse temperature ``beta``.
+
+            If ``marginals=True``, also contains:
+
+                * ``'variable_marginals'``: Dict of the form ``{v: p, ...}``, where
+                  ``p = prob(v == 1)``. With no linear biases every marginal is
+                  ``0.5`` by the global spin-flip symmetry.
+                * ``'interaction_marginals'``: Dict of the form
+                  ``{(u, v): {(s, t): p, ...}, ...}``, where ``(u, v)`` is an
+                  interaction in the binary quadratic model and
+                  ``p = prob(u == s & v == t)``, computed by the edge-expectation
+                  method.
 
         Examples:
             >>> import dimod
@@ -171,6 +182,12 @@ class PlanarGraphSampler(dimod.Sampler, dimod.Initialized):
 
         logZ = _log_partition(work)
 
+        info = {'log_partition_function': logZ}
+        if marginals:
+            info['variable_marginals'] = {v: 0.5 for v in bqm.variables}
+            info['interaction_marginals'] = _interaction_marginals(
+                work, bqm.quadratic, bqm.vartype)
+
         variables = list(bqm.variables)
         to_binary = bqm.vartype is dimod.BINARY
 
@@ -185,7 +202,7 @@ class PlanarGraphSampler(dimod.Sampler, dimod.Initialized):
 
         return dimod.SampleSet.from_samples((samples, variables),
                                             bqm.vartype, energy=energies,
-                                            info={'log_partition_function': logZ})
+                                            info=info)
 
 
 def _determine_pos(G: nx.MultiGraph) -> dict:
@@ -262,27 +279,74 @@ def _log_partition(bqm: dimod.BinaryQuadraticModel) -> float:
     """Log partition function of a spin model with zero linear biases.
 
     The partition function factorizes over the connected components of the
-    interaction graph; each component contributes its own global spin-flip
-    symmetry. Components with fewer than three spins are evaluated in closed
-    form and larger components use the planar Kasteleyn method.
+    interaction graph, and within each component over its biconnected
+    components (blocks): the Kasteleyn method requires a biconnected planar
+    graph, which contraction does not preserve. A single bridge (two-spin
+    block) is evaluated in closed form, and larger blocks use the planar
+    Kasteleyn method. Each block carries its own global spin-flip symmetry, so
+    joining ``B`` blocks of a component at shared cut vertices over-counts that
+    symmetry by a factor ``2 ** (B - 1)``.
     """
     logZ = -bqm.offset
 
-    for component in nx.connected_components(_interaction_graph(bqm)):
-        component = list(component)
-
+    graph = _interaction_graph(bqm)
+    for component in nx.connected_components(graph):
         if len(component) == 1:
             logZ += np.log(2)
-        elif len(component) == 2:
-            u, v = component
-            j = bqm.get_quadratic(u, v)
-            logZ += np.log(2) + np.logaddexp(j, -j)
-        else:
-            sub = _restrict(bqm, component)
-            G, _ = bqm_to_multigraph(sub)
-            logZ += log_partition_bqm(sub, _determine_pos(G))
+            continue
+
+        blocks = list(nx.biconnected_component_edges(graph.subgraph(component)))
+        for block_edges in blocks:
+            nodes = {v for edge in block_edges for v in edge}
+            if len(nodes) == 2:
+                u, v = nodes
+                j = bqm.get_quadratic(u, v)
+                logZ += np.log(2) + np.logaddexp(j, -j)
+            else:
+                block = dimod.BinaryQuadraticModel(dimod.SPIN)
+                block.add_linear_from((v, 0.0) for v in nodes)
+                for u, v in block_edges:
+                    block.set_quadratic(u, v, bqm.get_quadratic(u, v))
+                G, _ = bqm_to_multigraph(block)
+                logZ += log_partition_bqm(block, _determine_pos(G))
+
+        logZ -= (len(blocks) - 1) * np.log(2)
 
     return logZ
+
+
+def _interaction_marginals(bqm: dimod.BinaryQuadraticModel, interactions,
+                           vartype: dimod.Vartype) -> dict:
+    """Edge-expectation interaction marginals for a zero-field spin model.
+
+    ``bqm`` is a spin model whose couplings already include the
+    inverse-temperature factor. For each interaction the probability that the
+    two spins agree is ``Z_agree / (Z_agree + Z_disagree)``; the global
+    spin-flip symmetry splits each of the agree/disagree probabilities evenly
+    between its two matching joint configurations.
+    """
+    low = -1 if vartype is dimod.SPIN else 0
+    configs = ((low, low), (1, low), (low, 1), (1, 1))
+
+    marginals = {}
+    for u, v in interactions:
+        agree = bqm.copy()
+        agree.contract_variables(u, v)
+
+        disagree = bqm.copy()
+        disagree.flip_variable(v)
+        disagree.contract_variables(u, v)
+
+        logZ_agree = _log_partition(agree)
+        logZ_disagree = _log_partition(disagree)
+
+        p_agree = np.exp(logZ_agree - np.logaddexp(logZ_agree, logZ_disagree))
+        p_disagree = 1.0 - p_agree
+
+        probs = (p_agree / 2, p_disagree / 2, p_disagree / 2, p_agree / 2)
+        marginals[(u, v)] = dict(zip(configs, probs))
+
+    return marginals
 
 
 def _sample_state(bqm: dimod.BinaryQuadraticModel, rng: np.random.Generator) -> dict:
@@ -293,7 +357,8 @@ def _sample_state(bqm: dimod.BinaryQuadraticModel, rng: np.random.Generator) -> 
     """
     state = {}
 
-    for component in nx.connected_components(_interaction_graph(bqm)):
+    graph = _interaction_graph(bqm)
+    for component in nx.connected_components(graph):
         component = list(component)
 
         if len(component) == 1:
@@ -304,7 +369,12 @@ def _sample_state(bqm: dimod.BinaryQuadraticModel, rng: np.random.Generator) -> 
         root = component[0]
         signs = {root: 1}  # spin of each variable relative to the root
 
-        for v in component[1:]:
+        # contract along a spanning tree so that every contraction merges an
+        # actual edge into the root; merging non-adjacent vertices would break
+        # the planarity the Kasteleyn method relies on
+        order = list(nx.bfs_tree(graph.subgraph(component), root))
+
+        for v in order[1:]:
             agree = work.copy()
             agree.contract_variables(root, v)
 

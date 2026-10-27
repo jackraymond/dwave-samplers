@@ -172,9 +172,7 @@ class TestLogPartitionFunction(unittest.TestCase):
         bqm.add_interaction(2, 0, .5)
         bqm.add_offset(0)
 
-        pos = {0: (0, 0), 1: (1, 0), 2: (0, 1)}
-
-        sampleset = PlanarGraphSampler().sample(bqm, pos)
+        sampleset = PlanarGraphSampler().sample(bqm)
         logZ = sampleset.info['log_partition_function']
 
         self.assertAlmostEqual(logZ, self._brute_force_logZ(bqm))
@@ -187,9 +185,7 @@ class TestLogPartitionFunction(unittest.TestCase):
         bqm.add_interaction(0, 3, +1.0)
         bqm.add_offset(1.8)
 
-        pos = {0: (+1, +1), 1: (-1, +1), 2: (-1, -1), 3: (+1, -1)}
-
-        sampleset = PlanarGraphSampler().sample(bqm, pos)
+        sampleset = PlanarGraphSampler().sample(bqm)
         logZ = sampleset.info['log_partition_function']
 
         self.assertAlmostEqual(logZ, self._brute_force_logZ(bqm))
@@ -198,9 +194,8 @@ class TestLogPartitionFunction(unittest.TestCase):
         bqm = dimod.BinaryQuadraticModel.from_ising(
             {0: -0.0, 1: -0.0, 2: -0.0, 3: -0.0},
             {(1, 2): 2, (0, 1): 1, (1, 3): 1, (2, 3): 1, (0, 2): 1})
-        pos = {0: (0, 0), 1: (0, 1), 2: (1, 0), 3: (1, 1)}
 
-        sampleset = PlanarGraphSampler().sample(bqm, pos)
+        sampleset = PlanarGraphSampler().sample(bqm)
         logZ = sampleset.info['log_partition_function']
 
         self.assertAlmostEqual(logZ, self._brute_force_logZ(bqm))
@@ -211,14 +206,12 @@ class TestLogPartitionFunction(unittest.TestCase):
         bqm.add_interaction(1, 2, +1.0)
         bqm.add_interaction(2, 0, .5)
 
-        pos = {0: (0, 0), 1: (1, 0), 2: (0, 1)}
-
         for beta in (0.1, 0.5, 2.0):
-            sampleset = PlanarGraphSampler().sample(bqm, pos, beta=beta)
+            sampleset = PlanarGraphSampler().sample(bqm, beta=beta)
             logZ = sampleset.info['log_partition_function']
             self.assertAlmostEqual(logZ, self._brute_force_logZ(bqm, beta=beta))
 
-    def test_no_pos_provided(self):
+    def test_log_partition_in_info(self):
         bqm = dimod.BinaryQuadraticModel.empty(dimod.SPIN)
         bqm.add_interaction('a', 'b', +1.0)
         bqm.add_interaction('b', 'c', +1.0)
@@ -236,6 +229,21 @@ class TestLogPartitionFunction(unittest.TestCase):
 
         sampleset = PlanarGraphSampler().sample(bqm, num_reads=1, seed=0)
 
+        self.assertAlmostEqual(sampleset.info['log_partition_function'],
+                               self._brute_force_logZ(bqm))
+
+    def test_square_lattice_sampling(self):
+        # contracting a square lattice produces intermediate graphs that are
+        # planar but not biconnected; sampling must handle these via the
+        # spanning-tree contraction and block decomposition
+        L = 4
+        edges = {((i, j), (i, j + 1)) for i in range(L) for j in range(L - 1)}
+        edges |= {((i, j), (i + 1, j)) for i in range(L - 1) for j in range(L)}
+        bqm = dimod.BinaryQuadraticModel.from_ising({}, {e: -1.0 for e in edges})
+
+        sampleset = PlanarGraphSampler().sample(bqm, num_reads=3, seed=0)
+
+        self.assertEqual(sampleset.record.sample.shape, (3, L * L))
         self.assertAlmostEqual(sampleset.info['log_partition_function'],
                                self._brute_force_logZ(bqm))
 
@@ -314,4 +322,67 @@ class TestSampling(unittest.TestCase):
         np.testing.assert_allclose(
             sampleset.record.energy,
             bqm.energies((sampleset.record.sample, list(sampleset.variables))))
+
+
+class TestMarginals(unittest.TestCase):
+    def _brute_interaction_marginals(self, bqm, beta=1.0):
+        import itertools
+        variables = list(bqm.variables)
+        spin = bqm.change_vartype(dimod.SPIN, inplace=False)
+        weights = {config: np.exp(-beta * spin.energy(dict(zip(variables, config))))
+                   for config in itertools.product((-1, 1), repeat=len(variables))}
+        Z = sum(weights.values())
+        low = -1 if bqm.vartype is dimod.SPIN else 0
+
+        def to_native(s):
+            return s if bqm.vartype is dimod.SPIN else (s + 1) // 2
+
+        marginals = {}
+        for u, v in bqm.quadratic:
+            probs = {}
+            for su in (-1, 1):
+                for sv in (-1, 1):
+                    p = sum(w / Z for c, w in weights.items()
+                            if dict(zip(variables, c))[u] == su
+                            and dict(zip(variables, c))[v] == sv)
+                    probs[(to_native(su), to_native(sv))] = p
+            marginals[(u, v)] = probs
+        return marginals
+
+    def test_variable_marginals_are_half(self):
+        bqm = dimod.BinaryQuadraticModel.from_ising(
+            {}, {(0, 1): 1.0, (1, 2): -0.7, (0, 2): 0.4})
+        sampleset = PlanarGraphSampler().sample(bqm, num_reads=1, seed=0)
+        self.assertEqual(sampleset.info['variable_marginals'],
+                         {v: 0.5 for v in bqm.variables})
+
+    def test_interaction_marginals_spin(self):
+        bqm = dimod.BinaryQuadraticModel.from_ising(
+            {}, {(1, 2): 2, (0, 1): 1, (1, 3): 1, (2, 3): 1, (0, 2): 1})
+        sampleset = PlanarGraphSampler().sample(bqm, beta=0.8, num_reads=1, seed=0)
+        exact = self._brute_interaction_marginals(bqm, beta=0.8)
+        for edge, probs in sampleset.info['interaction_marginals'].items():
+            for config, p in probs.items():
+                self.assertAlmostEqual(p, exact[edge][config])
+
+    def test_interaction_marginals_binary(self):
+        bqm = dimod.BinaryQuadraticModel.from_ising(
+            {}, {(0, 1): 1.0, (1, 2): -0.7, (0, 2): 0.4}
+        ).change_vartype(dimod.BINARY, inplace=False)
+        sampleset = PlanarGraphSampler().sample(bqm, num_reads=1, seed=0)
+        exact = self._brute_interaction_marginals(bqm)
+        marginals = sampleset.info['interaction_marginals']
+        for edge, probs in marginals.items():
+            self.assertEqual(set(probs), {(0, 0), (1, 0), (0, 1), (1, 1)})
+            for config, p in probs.items():
+                self.assertAlmostEqual(p, exact[edge][config])
+
+    def test_marginals_false_omits_them(self):
+        bqm = dimod.BinaryQuadraticModel.from_ising(
+            {}, {(0, 1): 1.0, (1, 2): 1.0, (0, 2): 1.0})
+        sampleset = PlanarGraphSampler().sample(bqm, num_reads=1, seed=0,
+                                                marginals=False)
+        self.assertNotIn('variable_marginals', sampleset.info)
+        self.assertNotIn('interaction_marginals', sampleset.info)
+
 
