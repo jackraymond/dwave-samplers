@@ -19,6 +19,8 @@ import dimod
 import networkx as nx
 import numpy as np
 
+from dimod.typing import Variable
+
 from dwave.samplers.planar.partition import log_partition_bqm
 from dwave.samplers.planar.planar import rotation_from_coordinates, plane_triangulate, expanded_dual
 from dwave.samplers.planar.util import bqm_to_multigraph
@@ -26,7 +28,7 @@ from dwave.samplers.planar.util import bqm_to_multigraph
 __all__ = ["PlanarGraphSolver", "PlanarGraphSampler"]
 
 
-class PlanarGraphSolver(dimod.Sampler, dimod.Initialized):
+class PlanarGraphSolver(dimod.Sampler):
     """An exact solver for planar Ising problems with no linear biases."""
     parameters: typing.Dict[str, typing.Sequence[str]] = dict(pos=tuple())
     """Keyword arguments accepted by the sampling methods."""
@@ -39,7 +41,7 @@ class PlanarGraphSolver(dimod.Sampler, dimod.Initialized):
 
     def sample(self,
                bqm: dimod.BinaryQuadraticModel,
-               pos: typing.Optional[typing.Mapping[dimod.typing.Variable, typing.Tuple[float, float]]] = None,
+               pos: typing.Optional[typing.Mapping[Variable, typing.Tuple[float, float]]] = None,
                **kwargs) -> dimod.SampleSet:
         """Find a ground state of a planar Ising problem without linear biases.
 
@@ -96,7 +98,7 @@ class PlanarGraphSolver(dimod.Sampler, dimod.Initialized):
         return dimod.SampleSet.from_samples_bqm(state, bqm)
 
 
-class PlanarGraphSampler(dimod.Sampler, dimod.Initialized):
+class PlanarGraphSampler(dimod.Sampler):
     """A fair sampler for planar Ising problems with no linear biases.
 
     Draws exact (fair) samples from the Boltzmann distribution of a planar Ising
@@ -111,7 +113,7 @@ class PlanarGraphSampler(dimod.Sampler, dimod.Initialized):
     :attr:`~dimod.SampleSet.info` field.
     """
     parameters: typing.Dict[str, typing.Sequence[str]] = dict(
-        beta=tuple(), num_reads=tuple(), marginals=tuple(), seed=tuple())
+        num_reads=tuple(), beta=tuple(), marginals=tuple(), seed=tuple())
     """Keyword arguments accepted by the sampling methods."""
     properties: typing.Dict[str, typing.Any] = dict()
     """Values for parameters accepted by the sampling methods."""
@@ -122,8 +124,8 @@ class PlanarGraphSampler(dimod.Sampler, dimod.Initialized):
 
     def sample(self,
                bqm: dimod.BinaryQuadraticModel,
-               beta: float = 1.0,
                num_reads: int = 1,
+               beta: float = 1.0,
                marginals: bool = True,
                seed: typing.Optional[int] = None,
                **kwargs) -> dimod.SampleSet:
@@ -131,8 +133,8 @@ class PlanarGraphSampler(dimod.Sampler, dimod.Initialized):
 
         Args:
             bqm: Binary quadratic model representing a planar Ising model with no linear biases.
-            beta: `Boltzmann distribution`_ inverse temperature parameter.
             num_reads: Number of samples to draw.
+            beta: `Boltzmann distribution`_ inverse temperature parameter.
             marginals: Whether to compute the marginals. If True, they are
                 included in the returned :class:`~dimod.SampleSet`'s ``info`` field.
             seed: Seed for the pseudo-random number generator.
@@ -182,7 +184,7 @@ class PlanarGraphSampler(dimod.Sampler, dimod.Initialized):
 
         logZ = _log_partition(work)
 
-        info = {'log_partition_function': logZ}
+        info: typing.Dict[str, typing.Any] = {'log_partition_function': logZ}
         if marginals:
             info['variable_marginals'] = {v: 0.5 for v in bqm.variables}
             info['interaction_marginals'] = _interaction_marginals(
@@ -264,7 +266,7 @@ def _interaction_graph(bqm: dimod.BinaryQuadraticModel) -> nx.Graph:
     return g
 
 
-def _restrict(bqm: dimod.BinaryQuadraticModel, component: set) -> dimod.BinaryQuadraticModel:
+def _restrict(bqm: dimod.BinaryQuadraticModel, component: typing.Iterable) -> dimod.BinaryQuadraticModel:
     """Build the sub-model on ``component`` using only its nonzero couplings."""
     cset = set(component)
     sub = dimod.BinaryQuadraticModel(dimod.SPIN)
@@ -312,7 +314,7 @@ def _log_partition(bqm: dimod.BinaryQuadraticModel) -> float:
 
         logZ -= (len(blocks) - 1) * np.log(2)
 
-    return logZ
+    return float(logZ)
 
 
 def _interaction_marginals(bqm: dimod.BinaryQuadraticModel, interactions,
